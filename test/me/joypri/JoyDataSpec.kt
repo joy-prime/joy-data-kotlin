@@ -8,7 +8,7 @@ object FirstName: Key<String>(String::class)
 
 object JoyDataSpec : Spek({
     describe("Key") {
-        it("has a suitable fully qualified name") {
+        it("has the right fully qualified name") {
             assertEquals("me.joypri.FirstName", FirstName.qualifiedName)
         }
         it("has its declared valueClass") {
