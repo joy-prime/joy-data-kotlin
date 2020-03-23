@@ -15,7 +15,7 @@ object JoyDataSpec : Spek({
     }
     describe("JoyData") {
         it("constructs and gets") {
-            val data = JoyData(FirstName.to("Fred"), Age.to(12))
+            val data = JoyData(FirstName to "Fred", Age to 12)
             assertEquals("Fred", data[FirstName])
             assertEquals(12, data[Age])
         }

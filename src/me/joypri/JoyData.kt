@@ -27,6 +27,6 @@ open class Key<V> {
 
 data class KeyValue internal constructor(val keyName: String, val value: Any)
 
-fun <V: Any> Key<V>.to(value: V): KeyValue {
+infix fun <V: Any> Key<V>.to(value: V): KeyValue {
     return KeyValue(qualifiedName, value)
 }
