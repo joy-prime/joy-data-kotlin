@@ -6,10 +6,10 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import java.lang.IllegalArgumentException
 
-object FirstName: Key<String>()
-object Age: Key<Int>()
+object FirstName: Role<String>()
+object Age: Role<Int>()
 
-class Person(vararg entries: KeyValue): Data(*entries) {
+class Person(vararg entries: Part): Mix(*entries) {
     val firstName by FirstName
     val age by Age
 }
@@ -24,7 +24,7 @@ class DataTest {
 
     @Test
     fun `Data constructs and gets`() {
-        val data = Data(FirstName to "Fred", Age to 12)
+        val data = Mix(FirstName to "Fred", Age to 12)
         assertThat(data[FirstName]).isEqualTo("Fred")
         assertThat(data[Age]).isEqualTo(12)
     }
