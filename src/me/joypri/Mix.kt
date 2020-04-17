@@ -2,9 +2,7 @@ package me.joypri
 
 import kotlin.properties.ReadOnlyProperty
 import kotlin.properties.ReadWriteProperty
-import kotlin.reflect.KClass
 import kotlin.reflect.KProperty
-import kotlin.reflect.full.isSubclassOf
 import kotlin.reflect.full.primaryConstructor
 
 /**
@@ -27,12 +25,22 @@ open class Mix(vararg parts: Part) {
         }
     }
 
+    operator fun <V> Role<V>.unaryPlus() = OptionalRoleMixDelegateProvider<V>(qualifiedName)
+
     override fun equals(other: Any?): Boolean {
         return other is Remix && other.valueByQualifiedName == valueByQualifiedName
     }
 
     override fun hashCode(): Int {
         return valueByQualifiedName.hashCode()
+    }
+}
+
+class OptionalRoleMixDelegateProvider<V>(val qualifiedName: String) {
+    operator fun provideDelegate(thisRef: Mix, prop: KProperty<*>): RoleMixDelegate<V?> {
+        val anyValue = thisRef.valueByQualifiedName[qualifiedName]
+        @Suppress("UNCHECKED_CAST")
+        return RoleMixDelegate(anyValue as V?)
     }
 }
 
@@ -79,6 +87,10 @@ open class Remix(vararg parts: Part) {
         }
     }
 
+    operator fun <V> Role<V>.unaryPlus() = RoleRemixDelegateProvider<V?>(qualifiedName)
+
+    operator fun <M: Any, R : Any> MixRole<M, R>.not() = MixRoleRemixDelegateProvider<R>(qualifiedName)
+
     override fun equals(other: Any?): Boolean {
         return other is Remix && other.valueByQualifiedName == valueByQualifiedName
     }
@@ -88,37 +100,19 @@ open class Remix(vararg parts: Part) {
     }
 }
 
-abstract class Named {
-    val qualifiedName: String =
-        (this::class.qualifiedName
-            ?: throw IllegalStateException("Named subclass must have a qualifiedName; it is null'"))
-}
-
-abstract class Role<V> : Named() {
-    operator fun provideDelegate(thisRef: Mix, prop: KProperty<*>): RoleMixDelegate<V> {
-        val anyValue = thisRef.valueByQualifiedName[qualifiedName]
-            ?: throw IllegalArgumentException("missing key $qualifiedName")
-        @Suppress("UNCHECKED_CAST")
-        return RoleMixDelegate(anyValue as V)
-    }
-
-    operator fun provideDelegate(thisRef: Remix, prop: KProperty<*>): RoleRemixDelegate<V?> {
-        @Suppress("UNCHECKED_CAST")
+class RoleRemixDelegateProvider<VN>(private val qualifiedName: String) {
+    operator fun provideDelegate(thisRef: Remix, prop: KProperty<*>): RoleRemixDelegate<VN> {
         return RoleRemixDelegate(qualifiedName)
     }
 }
 
-class RoleMixDelegate<V>(private val value: V) : ReadOnlyProperty<Mix, V> {
-    override operator fun getValue(thisRef: Mix, property: KProperty<*>) = value
-}
-
-class RoleRemixDelegate<VQ>(private val qualifiedName: String) : ReadWriteProperty<Remix, VQ> {
-    override operator fun getValue(thisRef: Remix, property: KProperty<*>): VQ {
+class RoleRemixDelegate<VN>(private val qualifiedName: String) : ReadWriteProperty<Remix, VN> {
+    override operator fun getValue(thisRef: Remix, property: KProperty<*>): VN {
         @Suppress("UNCHECKED_CAST")
-        return thisRef.valueByQualifiedName[qualifiedName] as VQ
+        return thisRef.valueByQualifiedName[qualifiedName] as VN
     }
 
-    override operator fun setValue(thisRef: Remix, property: KProperty<*>, value: VQ) {
+    override operator fun setValue(thisRef: Remix, property: KProperty<*>, value: VN) {
         if (value == null) {
             thisRef.valueByQualifiedName.remove(qualifiedName)
         } else {
@@ -128,21 +122,9 @@ class RoleRemixDelegate<VQ>(private val qualifiedName: String) : ReadWriteProper
     }
 }
 
-data class Part internal constructor(val keyName: String, val value: Any)
+class MixRoleRemixDelegateProvider<R>(val qualifiedName: String)
 
-infix fun <V : Any> Role<V>.to(value: V): Part {
-    return Part(qualifiedName, value)
-}
-
-abstract class MixRole<M : Any, R : Any> : Named() {
-    operator fun provideDelegate(thisRef: Mix, prop: KProperty<*>): RoleMixDelegate<M?> {
-        val anyValue = thisRef.valueByQualifiedName[qualifiedName]
-        @Suppress("UNCHECKED_CAST")
-        return RoleMixDelegate(anyValue as M?)
-    }
-}
-
-inline operator fun <M : Any, reified R : Any> MixRole<M, R>.provideDelegate(
+inline operator fun <reified R : Any> MixRoleRemixDelegateProvider<R>.provideDelegate(
     thisRef: Remix,
     prop: KProperty<*>
 ): MixRoleRemixDelegate<R> {
@@ -163,5 +145,38 @@ class MixRoleRemixDelegate<R : Any>(
 
     override operator fun setValue(thisRef: Remix, property: KProperty<*>, value: R) {
         thisRef.valueByQualifiedName[qualifiedName] = value
+    }
+}
+
+abstract class Named {
+    val qualifiedName: String =
+        (this::class.qualifiedName
+            ?: throw IllegalStateException("Named subclass must have a qualifiedName; it is null'"))
+}
+
+abstract class Role<V> : Named() {
+    operator fun provideDelegate(thisRef: Mix, prop: KProperty<*>): RoleMixDelegate<V> {
+        val anyValue = thisRef.valueByQualifiedName[qualifiedName]
+            ?: throw IllegalArgumentException("missing key $qualifiedName")
+        @Suppress("UNCHECKED_CAST")
+        return RoleMixDelegate(anyValue as V)
+    }
+}
+
+class RoleMixDelegate<V>(private val value: V) : ReadOnlyProperty<Mix, V> {
+    override operator fun getValue(thisRef: Mix, property: KProperty<*>) = value
+}
+
+data class Part internal constructor(val keyName: String, val value: Any)
+
+infix fun <V : Any> Role<V>.to(value: V): Part {
+    return Part(qualifiedName, value)
+}
+
+abstract class MixRole<M : Any, R : Any> : Named() {
+    operator fun provideDelegate(thisRef: Mix, prop: KProperty<*>): RoleMixDelegate<M?> {
+        val anyValue = thisRef.valueByQualifiedName[qualifiedName]
+        @Suppress("UNCHECKED_CAST")
+        return RoleMixDelegate(anyValue as M?)
     }
 }

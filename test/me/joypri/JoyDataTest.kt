@@ -9,55 +9,43 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
-enum class Job {
-    CEO, JANITOR
-}
+enum class Job
 
 object FirstName : Role<String>()
+object MiddleName : Role<String>()
 object Age : Role<Int>()
 
 open class Person(vararg parts: Part) : Mix(*parts) {
     val firstName by FirstName
+    val middleName by +MiddleName
     val age by Age
 }
 
 open class PersonR(vararg parts: Part) : Remix(*parts) {
-    var firstName by FirstName
-    var age by Age
+    var firstName by +FirstName
+    var age by +Age
 }
-
-typealias PersonRole = MixRole<Person, PersonR>
 
 object TheirJob : Role<Job>()
 
 object EmployeeNumber : Role<Int>()
 object HireDate : Role<LocalDate>()
 
-open class HrInfo(vararg parts: Part) : Mix(*parts) {
-    val employeeNumber by EmployeeNumber
-    val hireDate by HireDate
-}
+open class HrInfo(vararg parts: Part) : Mix(*parts)
 
 open class HrInfoR(vararg parts: Part) : Remix(*parts) {
-    var employeeNumber by EmployeeNumber
-    var hireDate by HireDate
+    var employeeNumber by +EmployeeNumber
+    var hireDate by +HireDate
 }
 
 typealias HrInfoRole = MixRole<HrInfo, HrInfoR>
 
 object TheirHrInfo : HrInfoRole()
 
-open class Employee(vararg parts: Part) : Person(*parts) {
-    val job by TheirJob
-    val hrInfo by TheirHrInfo
-}
-
 open class EmployeeR(vararg parts: Part) : PersonR(*parts) {
-    var job by TheirJob
-    var hrInfo by TheirHrInfo
+    var job by +TheirJob
+    var hrInfo by !TheirHrInfo
 }
-
-typealias EmployeeRole = MixRole<Employee, EmployeeR>
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class JoyDataTest {
@@ -74,16 +62,23 @@ class JoyDataTest {
 
         @Test
         fun `constructs and gets`() {
-            val data = Mix(FirstName to "Fred", Age to 12)
-            assertEquals("Fred", data[FirstName])
-            assertEquals(12, data[Age])
+            val fred = Mix(FirstName to "Fred", Age to 12)
+            assertEquals("Fred", fred[FirstName])
+            assertNull(fred[MiddleName])
+            assertEquals(12, fred[Age])
         }
 
         @Test
         fun `subclass can delegate properties to roles`() {
-            val person = Person(FirstName to "Fred", Age to 12)
-            assertEquals("Fred", person.firstName)
-            assertEquals(12, person.age)
+            val fred = Person(FirstName to "Fred", Age to 12)
+            assertEquals("Fred", fred.firstName)
+            assertNull(fred.middleName)
+            assertEquals(12, fred.age)
+
+            val jane = Person(FirstName to "Jane", MiddleName to "Ann", Age to 14)
+            assertEquals("Jane", jane.firstName)
+            assertEquals("Ann", jane.middleName)
+            assertEquals(14, jane.age)
         }
 
         @Test
@@ -135,6 +130,7 @@ class JoyDataTest {
             }
             assertEquals("Fred", employee.firstName)
             assertEquals(12, employee.age)
+            assertNull(employee.job)
             assertEquals(789, employee.hrInfo.employeeNumber)
             assertEquals(fredHireDate, employee.hrInfo.hireDate)
         }
