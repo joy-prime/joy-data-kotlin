@@ -9,7 +9,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
-enum class Job
+enum class Job {
+    CEO
+}
 
 object FirstName : Role<String>()
 object MiddleName : Role<String>()
@@ -24,6 +26,8 @@ open class Person(vararg parts: Part) : Mix(*parts) {
 open class PersonR(vararg parts: Part) : Remix(*parts) {
     var firstName by +FirstName
     var age by +Age
+
+    override fun toMix() = Person(*mixParts())
 }
 
 object TheirJob : Role<Job>()
@@ -31,20 +35,32 @@ object TheirJob : Role<Job>()
 object EmployeeNumber : Role<Int>()
 object HireDate : Role<LocalDate>()
 
-open class HrInfo(vararg parts: Part) : Mix(*parts)
+open class HrInfo(vararg parts: Part) : Mix(*parts) {
+    val employeeNumber by EmployeeNumber
+    val hireDate by HireDate
+}
 
 open class HrInfoR(vararg parts: Part) : Remix(*parts) {
     var employeeNumber by +EmployeeNumber
     var hireDate by +HireDate
+
+    override fun toMix() = HrInfo(*mixParts())
 }
 
 typealias HrInfoRole = MixRole<HrInfo, HrInfoR>
 
 object TheirHrInfo : HrInfoRole()
 
+open class Employee(vararg parts: Part) : Person(*parts) {
+    val job by TheirJob
+    val hrInfo by TheirHrInfo
+}
+
 open class EmployeeR(vararg parts: Part) : PersonR(*parts) {
     var job by +TheirJob
     var hrInfo by !TheirHrInfo
+
+    override fun toMix() = Employee(*mixParts())
 }
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -131,6 +147,26 @@ class JoyDataTest {
             assertEquals("Fred", employee.firstName)
             assertEquals(12, employee.age)
             assertNull(employee.job)
+            assertEquals(789, employee.hrInfo.employeeNumber)
+            assertEquals(fredHireDate, employee.hrInfo.hireDate)
+        }
+
+        @Test
+        fun `Build Mix from Remix`() {
+            val fredHireDate = LocalDate.of(2020, 1, 20)
+            val employeeR = EmployeeR().apply {
+                firstName = "Fred"
+                age = 12
+                job = Job.CEO
+                hrInfo.run {
+                    employeeNumber = 789
+                    hireDate = fredHireDate
+                }
+            }
+            val employee = employeeR.toMix()
+            assertEquals("Fred", employee.firstName)
+            assertEquals(12, employee.age)
+            assertEquals(Job.CEO, employee.job)
             assertEquals(789, employee.hrInfo.employeeNumber)
             assertEquals(fredHireDate, employee.hrInfo.hireDate)
         }

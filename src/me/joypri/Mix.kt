@@ -12,6 +12,7 @@ import kotlin.reflect.full.primaryConstructor
  * will take on the values of the corresponding roles.
  */
 open class Mix(vararg parts: Part) {
+
     val valueByQualifiedName: Map<String, Any> =
         parts.map { Pair(it.keyName, it.value) }.toMap()
 
@@ -61,12 +62,15 @@ annotation class RemixMarker
  */
 @RemixMarker
 open class Remix(vararg parts: Part) {
+
     val valueByQualifiedName: MutableMap<String, Any> =
-        HashMap<String, Any>(parts.size).apply {
+        HashMap<String, Any>().apply {
             for (entry in parts) {
                 this[entry.keyName] = entry.value
             }
         }
+
+    val parts get() = valueByQualifiedName.map { Part(it.key, it.value) }
 
     inline operator fun <reified V> get(role: Role<V>): V? {
         return when (val value = this.valueByQualifiedName[role.qualifiedName]) {
@@ -87,9 +91,21 @@ open class Remix(vararg parts: Part) {
         }
     }
 
+    protected fun mixParts(): Array<Part> {
+        return parts.map { part ->
+            if (part.value is Remix) {
+                Part(part.keyName, part.value.toMix())
+            } else {
+                part
+            }
+        }.toTypedArray()
+    }
+
+    open fun toMix() = Mix(*mixParts())
+
     operator fun <V> Role<V>.unaryPlus() = RoleRemixDelegateProvider<V?>(qualifiedName)
 
-    operator fun <M: Any, R : Any> MixRole<M, R>.not() = MixRoleRemixDelegateProvider<R>(qualifiedName)
+    operator fun <M : Any, R : Any> MixRole<M, R>.not() = MixRoleRemixDelegateProvider<R>(qualifiedName)
 
     override fun equals(other: Any?): Boolean {
         return other is Remix && other.valueByQualifiedName == valueByQualifiedName
@@ -122,6 +138,7 @@ class RoleRemixDelegate<VN>(private val qualifiedName: String) : ReadWriteProper
     }
 }
 
+@Suppress("unused") // This is just a lie; R is used in the upcoming extension function.
 class MixRoleRemixDelegateProvider<R>(val qualifiedName: String)
 
 inline operator fun <reified R : Any> MixRoleRemixDelegateProvider<R>.provideDelegate(
@@ -173,10 +190,4 @@ infix fun <V : Any> Role<V>.to(value: V): Part {
     return Part(qualifiedName, value)
 }
 
-abstract class MixRole<M : Any, R : Any> : Named() {
-    operator fun provideDelegate(thisRef: Mix, prop: KProperty<*>): RoleMixDelegate<M?> {
-        val anyValue = thisRef.valueByQualifiedName[qualifiedName]
-        @Suppress("UNCHECKED_CAST")
-        return RoleMixDelegate(anyValue as M?)
-    }
-}
+abstract class MixRole<M : Any, R : Any> : Role<M>()
