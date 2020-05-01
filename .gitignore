@@ -41,6 +41,25 @@ gradle-app.setting
 # # Work around https://youtrack.jetbrains.com/issue/IDEA-116898
 # gradle/wrapper/gradle-wrapper.properties
 
+###### IntelliJ
+# Taken from https://github.com/github/gitignore/blob/master/Global/JetBrains.gitignore
+
+# User-specific stuff
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+.idea/**/shelf
+.idea/inspectionProfiles
+
+# Gradle
+.idea/**/gradle.xml
+.idea/**/libraries
+
+# IntelliJ
+out/
+
+
 ###### MacOS
 
 .DS_Store
