@@ -14,7 +14,7 @@ import kotlin.reflect.full.primaryConstructor
 open class Mix(vararg parts: Part) {
 
     val valueByQualifiedName: Map<String, Any> =
-        parts.map { Pair(it.keyName, it.value) }.toMap()
+        parts.associate { it.keyName to it.value }
 
     inline operator fun <reified V> get(role: Role<V>): V? {
         return when (val value = this.valueByQualifiedName[role.qualifiedName]) {
@@ -64,16 +64,12 @@ annotation class RemixMarker
 open class Remix(vararg parts: Part) {
 
     val valueByQualifiedName: MutableMap<String, Any> =
-        HashMap<String, Any>().apply {
-            for (entry in parts) {
-                this[entry.keyName] = entry.value
-            }
-        }
+            parts.associateTo(mutableMapOf()) { it.keyName to it.value }
 
     val parts get() = valueByQualifiedName.map { Part(it.key, it.value) }
 
     inline operator fun <reified V> get(role: Role<V>): V? {
-        return when (val value = this.valueByQualifiedName[role.qualifiedName]) {
+        return when (val value = valueByQualifiedName[role.qualifiedName]) {
             null -> null
             is V -> value
             else -> throw IllegalStateException(
@@ -86,8 +82,7 @@ open class Remix(vararg parts: Part) {
         if (value == null) {
             valueByQualifiedName.remove(role.qualifiedName)
         } else {
-            @Suppress("RemoveExplicitTypeArguments") // necessary to make compiler happy
-            valueByQualifiedName.set<String, Any>(role.qualifiedName, value)
+            valueByQualifiedName[role.qualifiedName] = value as Any
         }
     }
 
@@ -132,8 +127,7 @@ class RoleRemixDelegate<VN>(private val qualifiedName: String) : ReadWriteProper
         if (value == null) {
             thisRef.valueByQualifiedName.remove(qualifiedName)
         } else {
-            @Suppress("RemoveExplicitTypeArguments") // necessary to satisfy compiler
-            thisRef.valueByQualifiedName.set<String, Any>(qualifiedName, value)
+            thisRef.valueByQualifiedName[qualifiedName] = value as Any
         }
     }
 }
@@ -146,7 +140,7 @@ inline operator fun <reified R : Any> MixRoleRemixDelegateProvider<R>.provideDel
     prop: KProperty<*>
 ): MixRoleRemixDelegate<R> {
     val ctor = R::class.primaryConstructor
-        ?: throw java.lang.IllegalArgumentException("${R::class} has no primary constructor")
+        ?: throw IllegalArgumentException("${R::class} has no primary constructor")
     @Suppress("UNCHECKED_CAST")
     return MixRoleRemixDelegate(qualifiedName) { ctor.call(arrayOf<Part>()) }
 }
