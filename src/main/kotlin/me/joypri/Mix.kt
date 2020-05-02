@@ -16,6 +16,8 @@ open class Mix(vararg parts: Part) {
     val valueByQualifiedName: Map<String, Any> =
         parts.map { Pair(it.keyName, it.value) }.toMap()
 
+    val foo = parts.hashCode()
+
     inline operator fun <reified V> get(role: Role<V>): V? {
         return when (val value = this.valueByQualifiedName[role.qualifiedName]) {
             null -> null
@@ -29,11 +31,12 @@ open class Mix(vararg parts: Part) {
     operator fun <V> Role<V>.unaryPlus() = OptionalRoleMixDelegateProvider<V>(qualifiedName)
 
     override fun equals(other: Any?): Boolean {
-        return other is Remix && other.valueByQualifiedName == valueByQualifiedName
+        return other is Mix && other.javaClass == javaClass
+                && other.valueByQualifiedName == valueByQualifiedName
     }
 
     override fun hashCode(): Int {
-        return valueByQualifiedName.hashCode()
+        return 31 * valueByQualifiedName.hashCode() + javaClass.hashCode()
     }
 }
 
@@ -108,11 +111,12 @@ open class Remix(vararg parts: Part) {
     operator fun <M : Any, R : Any> MixRole<M, R>.not() = MixRoleRemixDelegateProvider<R>(qualifiedName)
 
     override fun equals(other: Any?): Boolean {
-        return other is Remix && other.valueByQualifiedName == valueByQualifiedName
+        return other is Remix && other.javaClass == javaClass
+                && other.valueByQualifiedName == valueByQualifiedName
     }
 
     override fun hashCode(): Int {
-        return valueByQualifiedName.hashCode()
+        return 31 * valueByQualifiedName.hashCode() + javaClass.hashCode()
     }
 }
 

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import java.time.LocalDate
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
@@ -85,6 +86,29 @@ class JoyDataTest {
         }
 
         @Test
+        fun `equals and hashCode`() {
+            val fredMix1 = Mix(FirstName to "Fred", Age to 12)
+            val fredMix2 = Mix(FirstName to "Fred", Age to 12)
+            val fredPerson1 = Person(FirstName to "Fred", Age to 12)
+            val fredPerson2 = Person(FirstName to "Fred", Age to 12)
+            val georgeMix = Mix(FirstName to "George", Age to 12)
+            val georgePerson = Person(FirstName to "George", Age to 12)
+
+            assertEquals(fredMix1, fredMix2)
+            assertEquals(fredMix1.hashCode(), fredMix2.hashCode())
+
+            assertEquals(fredPerson1, fredPerson2)
+            assertEquals(fredPerson1.hashCode(), fredPerson2.hashCode())
+
+            assertNotEquals(fredMix1, georgeMix)
+            assertNotEquals(fredMix1, fredPerson1)
+            assertNotEquals(fredMix1 as Any?, null)
+
+            assertNotEquals(fredPerson1, fredMix1)
+            assertNotEquals(fredPerson1, georgePerson)
+        }
+
+        @Test
         fun `subclass can delegate properties to roles`() {
             val fred = Person(FirstName to "Fred", Age to 12)
             assertEquals("Fred", fred.firstName)
@@ -115,6 +139,41 @@ class JoyDataTest {
             assertNull(person[Age])
             person[Age] = 12
             assertEquals(12, person[Age])
+        }
+
+        @Test
+        fun `equals and hashCode`() {
+            val fredRemix1 = Remix(FirstName to "Fred", Age to 12)
+            val fredRemix2 = Remix(FirstName to "Fred", Age to 12)
+            val fredMix = Mix(FirstName to "Fred", Age to 12)
+
+            val fredPerson = Person(FirstName to "Fred", Age to 12)
+            val fredPersonR1 = PersonR(FirstName to "Fred", Age to 12)
+            val fredPersonR2 = PersonR(FirstName to "Fred", Age to 12)
+
+            val georgeRemix = Remix(FirstName to "George", Age to 12)
+            val georgePersonR = PersonR(FirstName to "George", Age to 12)
+
+            assertEquals(fredRemix1, fredRemix2)
+            assertEquals(fredRemix1.hashCode(), fredRemix2.hashCode())
+
+            assertEquals(fredPersonR1, fredPersonR2)
+            assertEquals(fredPersonR1.hashCode(), fredPersonR2.hashCode())
+
+            assertNotEquals(fredRemix1 as Any, fredMix as Any)
+            assertNotEquals(fredRemix1 as Any, fredPerson as Any)
+            assertNotEquals(fredRemix1 as Any?, null)
+
+            assertNotEquals(fredMix as Any, fredRemix1 as Any)
+            assertNotEquals(fredPerson as Any, fredRemix1 as Any)
+
+            assertNotEquals(fredPersonR1, fredRemix1)
+            assertNotEquals(fredPersonR1, georgePersonR)
+            assertNotEquals(fredPersonR1 as Any, fredMix as Any)
+
+            assertNotEquals(fredRemix1, fredPersonR1)
+            assertNotEquals(fredMix as Any, fredPersonR1 as Any)
+            assertNotEquals(fredRemix1, georgeRemix)
         }
 
         @Test
