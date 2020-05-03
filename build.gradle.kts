@@ -1,3 +1,6 @@
+group="org.joy.prime"
+version="0.0.1"
+
 plugins {
     kotlin("jvm") version "1.3.72"
 }
