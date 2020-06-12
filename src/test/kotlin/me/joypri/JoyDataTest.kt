@@ -1,3 +1,5 @@
+@file:Suppress("PublicApiImplicitType")
+
 package me.joypri
 
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -127,6 +129,45 @@ class JoyDataTest {
                 Person(FirstName to "Fred")
             }
         }
+
+        @Test
+        fun `Mix with`() {
+            val fred = Person(FirstName to "Fred", Age to 11).with(Age to 12)
+            assertEquals("Fred", fred.firstName)
+            assertNull(fred.middleName)
+            assertEquals(12, fred.age)
+
+            val fredJohn = fred.with(MiddleName to "John")
+            assertEquals("Fred", fredJohn.firstName)
+            assertEquals("John", fredJohn.middleName)
+            assertEquals(12, fredJohn.age)
+        }
+
+        @Test
+        fun `Mix mapAt`() {
+            val fred = Person(
+                FirstName to "Fred", Age to 11
+            ).mapAt(Age) { (it ?: 0) + 1 }
+            assertEquals("Fred", fred.firstName)
+            assertNull(fred.middleName)
+            assertEquals(12, fred.age)
+
+            val fredJohn = fred.mapAt(MiddleName) {
+                require(it == null)
+                "John"
+            }
+            assertEquals("Fred", fredJohn.firstName)
+            assertEquals("John", fredJohn.middleName)
+            assertEquals(12, fredJohn.age)
+
+            val fred2 = fredJohn.mapAt(MiddleName) {
+                require(it == "John")
+                null
+            }
+            assertEquals("Fred", fred2.firstName)
+            assertNull(fred2.middleName)
+            assertEquals(12, fred2.age)
+        }
     }
 
     @Nested
@@ -228,6 +269,37 @@ class JoyDataTest {
             assertEquals(Job.CEO, employee.job)
             assertEquals(789, employee.hrInfo.employeeNumber)
             assertEquals(fredHireDate, employee.hrInfo.hireDate)
+        }
+
+        @Test
+        fun `Remix with`() {
+            val doe = PersonR(Age to 11)
+            assertNull(doe.firstName)
+
+            val fred = doe.with(FirstName to "Fred", Age to 12)
+            assertEquals("Fred", fred.firstName)
+            assertEquals(12, fred.age)
+        }
+
+        @Test
+        fun `Remix mapAt`() {
+            val fred = PersonR(
+                FirstName to "Fred", Age to 11
+            ).mapAt(Age) { (it ?: 0) + 1 }
+            assertEquals("Fred", fred.firstName)
+            assertEquals(12, fred.age)
+
+            val doe = fred.mapAt(FirstName) {
+                require(it == "Fred")
+                null
+            }
+
+            val fred2 = doe.mapAt(FirstName) {
+                require(it == null)
+                "Fred"
+            }
+            assertEquals("Fred", fred2.firstName)
+            assertEquals(12, fred2.age)
         }
     }
 }
