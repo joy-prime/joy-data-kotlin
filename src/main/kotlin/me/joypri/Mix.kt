@@ -2,6 +2,7 @@ package me.joypri
 
 import kotlin.properties.ReadOnlyProperty
 import kotlin.properties.ReadWriteProperty
+import kotlin.reflect.KClass
 import kotlin.reflect.KProperty
 import kotlin.reflect.full.primaryConstructor
 
@@ -23,8 +24,8 @@ inline operator fun <M : MixData, reified V> M.get(role: Role<V>): V? {
 /**
  * Constructs a new instance of this same class, with roles overridden by the provided `overrides`.
  */
-inline fun <reified M : MixData> M.with(vararg overrides: Part): M =
-    constructFromParts((parts + overrides).toTypedArray()) as M
+fun <M : MixData> M.with(vararg overrides: Part): M =
+    this::class.constructFromParts((parts + overrides).toTypedArray())
 
 /**
  * Returns an instance of this class with the value of `role` mapped through `f`.
@@ -32,21 +33,21 @@ inline fun <reified M : MixData> M.with(vararg overrides: Part): M =
  * `null`, then the returned instance does not have `role` (which may cause an exception
  * if the receiver's class requires `role`).
  */
-inline fun <reified M : MixData, reified V : Any> M.mapAt(role: Role<V>, f: (V?) -> V?): M {
+inline fun <M : MixData, reified V : Any> M.mapAt(role: Role<V>, f: (V?) -> V?): M {
     val oldValue: V? = this[role]
     val newValue: V? = f(oldValue)
     return if (newValue != null) {
         with(Part(role.qualifiedName, newValue))
     } else {
-        constructFromParts(
+        this::class.constructFromParts(
             parts.filter { it.keyName != role.qualifiedName }.toTypedArray()
         )
     }
 }
 
-inline fun <reified R : Any> constructFromParts(parts: Array<Part>): R {
-    val ctor = R::class.primaryConstructor
-        ?: throw IllegalArgumentException("${R::class} has no primary constructor")
+fun <R: Any> KClass<R>.constructFromParts(parts: Array<Part>): R {
+    val ctor = primaryConstructor
+        ?: throw IllegalArgumentException("$this has no primary constructor")
     return ctor.call(parts)
 }
 
@@ -165,8 +166,9 @@ inline operator fun <reified R : Any> MixRoleRemixDelegateProvider<R>.provideDel
     thisRef: Remix,
     prop: KProperty<*>
 ): MixRoleRemixDelegate<R> {
-    @Suppress("RemoveExplicitTypeArguments")
-    return MixRoleRemixDelegate<R>(qualifiedName) { constructFromParts(arrayOf()) }
+    return MixRoleRemixDelegate(qualifiedName) {
+        R::class.constructFromParts(arrayOf())
+    }
 }
 
 class MixRoleRemixDelegate<R : Any>(

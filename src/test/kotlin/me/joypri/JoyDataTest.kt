@@ -131,7 +131,7 @@ class JoyDataTest {
         }
 
         @Test
-        fun `Mix with`() {
+        fun `Mix_with basics`() {
             val fred = Person(FirstName to "Fred", Age to 11).with(Age to 12)
             assertEquals("Fred", fred.firstName)
             assertNull(fred.middleName)
@@ -144,7 +144,16 @@ class JoyDataTest {
         }
 
         @Test
-        fun `Mix mapAt`() {
+        fun `Mix_with preserves runtime class`() {
+            val fredMix: Mix = Person(FirstName to "Fred", Age to 11)
+            assertEquals(Person::class, fredMix::class)
+
+            val fredMixWith = fredMix.with(Age to 12)
+            assertEquals(Person::class, fredMixWith::class)
+        }
+
+        @Test
+        fun `Mix_mapAt basics`() {
             val fred = Person(
                 FirstName to "Fred", Age to 11
             ).mapAt(Age) { (it ?: 0) + 1 }
@@ -272,7 +281,7 @@ class JoyDataTest {
         }
 
         @Test
-        fun `Remix with`() {
+        fun `Remix_with basics`() {
             val doe = PersonR(Age to 11)
             assertNull(doe.firstName)
 
@@ -282,7 +291,16 @@ class JoyDataTest {
         }
 
         @Test
-        fun `Remix mapAt`() {
+        fun `Remix_with preserves runtime class`() {
+            val fredRemix: Remix = PersonR(FirstName to "Fred", Age to 11)
+            assertEquals(PersonR::class, fredRemix::class)
+
+            val fredRemixWith = fredRemix.with(Age to 12)
+            assertEquals(PersonR::class, fredRemixWith::class)
+        }
+
+        @Test
+        fun `Remix_mapAt basics`() {
             val fred = PersonR(
                 FirstName to "Fred", Age to 11
             ).mapAt(Age) { (it ?: 0) + 1 }
