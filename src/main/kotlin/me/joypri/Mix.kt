@@ -30,83 +30,75 @@ fun <M : MixParts> M.with(vararg overrides: Part): M =
     this::class.constructFromParts(parts + overrides)
 
 /**
- * Returns an instance of this class with the value of `role` mapped through `f`.
- * If the receiver does not have `role`, then `f` is passed `null`. If `f` returns
- * `null`, then the returned instance does not have `role` (which may cause an exception
- * if the receiver's class requires `role`). Other than replacing the specified role,
- * this method is a shallow copy that reuses role values.
- */
-inline fun <M : MixParts, reified V : Any> M.mapAt(role: Role<V>, f: (V?) -> V?): M {
-    val oldValue: V? = this[role]
-    val newValue: V? = f(oldValue)
-    return if (newValue != null) {
-        with(Part(role.qualifiedName, newValue))
-    } else {
-        this::class.constructFromParts(
-            parts.filter { it.keyName != role.qualifiedName }
-        )
-    }
-}
-
-/**
  * Returns an instance of this class with the value at `path` mapped through `f`.
- * All path elements except the last must represent `MixParts` values that already
- * exist, else this method throws `IllegalArgumentException`. If no value is
- * present at the last path element, then `f` is passed `null`. If `f` returns
- * `null`, then `role` is omitted from the `Mix` value at the penultimate path
- * element (which may cause an exception if that `Mix` class requires `role`).
+ * There must be an existing value at `path` (and hence every step along `path`),
+ * else this method throws `IllegalArgumentException`.
  *
- * `path` can be empty, which means the mapping should occur at the root.
- * In this case, this method throws `IllegalStateException` if `f` returns `null`.
- *
- * This method constructs new `MixParts` instances all the way down `path`,
- * preserving runtime classes. In all other respects, it is a shallow copy
+ * This method constructs new `List` and `MixParts` instances all the way down `path`,
+ * preserving `MixParts` runtime classes. In all other respects, it is a shallow copy
  * that reuses role values. Beyond the usual cautions about reuse of mutable
- * values in shallow copies, the complicated mix of shared and new `MixParts`
+ * values in shallow copies, the complex mix of shared and new `MixParts`
  * instances may be problematic for `Remix`s.
  */
 @Suppress("UNCHECKED_CAST")
-fun <M : MixParts, V : Any> M.mapAt(path: RolePath, f: (V?) -> V?): M =
+fun <M : MixParts, V : Any> M.mapAt(path: RolePath, f: (V) -> V): M {
     if (path.isEmpty()) {
-        val fReturn = f(this as V) as M?
-        check(fReturn != null)
-        fReturn
+        return f(this as V) as M
     } else {
-        val firstQn = path.first().qualifiedName
-        val oldRoleValue: Any? = this.valueByQualifiedName[firstQn]
-        val newRoleValue: Any? =
+        val pathHead = path.first()
+
+        fun mapValue(v: Any): Any =
             if (path.size == 1) {
-                f(oldRoleValue as V?)
+                f(v as V)
             } else {
-                require(oldRoleValue is MixParts)
-                oldRoleValue.mapAt(path.drop(1), f)
+                require(v is MixParts) {
+                    "expected MixParts at $pathHead but got $v"
+                }
+                v.mapAt(path.drop(1), f)
             }
-        val newParts: List<Part> =
-            if (oldRoleValue != null) {
-                if (newRoleValue != null) {
-                    // Transform existing part.
-                    parts.map {
-                        if (it.keyName == firstQn) {
-                            Part(it.keyName, newRoleValue)
-                        } else {
-                            it
+
+        val oldHeadValue: Any? = this.valueByQualifiedName[pathHead.qualifiedName]
+        require(oldHeadValue != null) {
+            "no value at $pathHead"
+        }
+        val newHeadValue: Any =
+            if (pathHead is RoleAtIndex<*, *>) {
+                require(oldHeadValue is List<*>) {
+                    "because the next role in the path is indexed, needed a List at $pathHead but got $oldHeadValue"
+                }
+                val index = pathHead.index
+                require(index in 0 until oldHeadValue.size) {
+                    "invalid index $index; existing list at $pathHead has size ${oldHeadValue.size}"
+                }
+                oldHeadValue.mapIndexed { i, v ->
+                    if (i == index) {
+                        require(v != null) {
+                            "unexpected null at $pathHead"
                         }
+                        mapValue(v)
+                    } else {
+                        v
                     }
-                } else {
-                    // Drop existing part.
-                    parts.filter { it.keyName != firstQn }
                 }
             } else {
-                // We only support an absent existing role in the last path element.
-                require(path.size == 1)
-                if (newRoleValue != null) {
-                    parts + Part(firstQn, newRoleValue)
+                mapValue(oldHeadValue)
+            }
+
+        val newParts: List<Part> =
+            // Transform existing part.
+            parts.map {
+                if (it.keyName == pathHead.qualifiedName) {
+                    Part(it.keyName, newHeadValue)
                 } else {
-                    parts
+                    it
                 }
             }
-        this::class.constructFromParts(newParts)
+        return this::class.constructFromParts(newParts)
     }
+}
+
+fun <M : MixParts, V : Any> M.mapAt(vararg role: Role<*>, f: (V) -> V): M =
+    mapAt(role.toList(), f)
 
 fun <R : Any> KClass<R>.constructFromParts(parts: List<Part>): R {
     val ctor = primaryConstructor
@@ -258,7 +250,7 @@ class MixRoleRemixDelegate<R : Any>(
 }
 
 abstract class Named {
-    val qualifiedName: String =
+    open val qualifiedName: String =
         (this::class.qualifiedName
             ?: throw IllegalStateException("Named subclass must have a qualifiedName; it is null'"))
 }
@@ -271,6 +263,19 @@ abstract class Role<V> : Named() {
         return RoleMixDelegate(anyValue as V)
     }
 }
+
+class RoleAtIndex<R : Role<V>, V>(
+    val role: R,
+    val index: Int
+) : Role<V>() {
+    override val qualifiedName: String = role.qualifiedName
+    override fun toString(): String {
+        return "$role[$index]"
+    }
+}
+
+operator fun <V, R : Role<V>> R.get(i: Int): RoleAtIndex<R, V> =
+    RoleAtIndex(this, i)
 
 typealias RolePath = List<Role<*>>
 

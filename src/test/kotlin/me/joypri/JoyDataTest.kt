@@ -14,7 +14,8 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 enum class Job {
-    CEO
+    IC,
+    MANAGER,
 }
 
 object FirstName : Role<String>()
@@ -65,6 +66,12 @@ open class EmployeeR(vararg parts: Part) : PersonR(*parts) {
     var hrInfo by !TheirHrInfo
 
     override fun toMix() = Employee(*mixParts())
+}
+
+object Reports : Role<List<Employee>>()
+
+open class Manager(vararg parts: Part) : Employee(*parts) {
+    val reports by Reports
 }
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -157,64 +164,63 @@ class JoyDataTest {
         fun `Mix_mapAt Role`() {
             val fred = Person(
                 FirstName to "Fred", Age to 11
-            ).mapAt(Age) { (it ?: 0) + 1 }
+            ).mapAt(Age) { age: Int -> age + 1 }
             assertEquals("Fred", fred.firstName)
             assertNull(fred.middleName)
             assertEquals(12, fred.age)
-
-            val fredJohn = fred.mapAt(MiddleName) {
-                require(it == null)
-                "John"
-            }
-            assertEquals("Fred", fredJohn.firstName)
-            assertEquals("John", fredJohn.middleName)
-            assertEquals(12, fredJohn.age)
-
-            val fred2 = fredJohn.mapAt(MiddleName) {
-                require(it == "John")
-                null
-            }
-            assertEquals("Fred", fred2.firstName)
-            assertNull(fred2.middleName)
-            assertEquals(12, fred2.age)
         }
 
         @Test
         fun `Mix_mapAt RolePath`() {
-            val hireDate = LocalDate.of(1990, 1, 25)
-            val employeeNumber = 10000
+            val fredHireDate = LocalDate.of(1990, 1, 25)
+            val fredEmployeeNumber = 10000
+            val fredAge = 35
             val fred = Employee(
-                FirstName to "Mr. Fred",
-                Age to 35,
-                TheirJob to Job.CEO,
+                FirstName to "Fred",
+                Age to fredAge,
+                TheirJob to Job.IC,
                 TheirHrInfo to HrInfo(
-                    EmployeeNumber to employeeNumber,
-                    HireDate to hireDate
+                    EmployeeNumber to fredEmployeeNumber,
+                    HireDate to fredHireDate
                 )
             )
-            val fred2 = fred.mapAt(
-                listOf(TheirHrInfo, EmployeeNumber)
-            ) { en: Int? -> (en ?: 0) + 1 }
-            assertEquals("Mr. Fred", fred2.firstName)
+            val fred2 = fred.mapAt(TheirHrInfo, EmployeeNumber) { en: Int -> en + 1 }
+            assertEquals("Fred", fred2.firstName)
             assertNull(fred2.middleName)
-            assertEquals(hireDate, fred2.hrInfo.hireDate)
-            assertEquals(employeeNumber + 1, fred2.hrInfo.employeeNumber)
+            assertEquals(fredHireDate, fred2.hrInfo.hireDate)
+            assertEquals(fredEmployeeNumber + 1, fred2.hrInfo.employeeNumber)
 
-            val olderFred = fred.mapAt(listOf()) { e: Employee? ->
-                require(e != null)
-                e.with(Age to 40)
+            val johnAge = 40
+            val john = fred.mapAt() { e: Employee ->
+                e.with(FirstName to "John", Age to johnAge)
             }
-            assertEquals(40, olderFred.age)
-            assertEquals("Mr. Fred", olderFred.firstName)
-            assertNull(olderFred.middleName)
-            assertEquals(hireDate, olderFred.hrInfo.hireDate)
+            assertEquals(johnAge, john.age)
+            assertEquals("John", john.firstName)
+            assertNull(john.middleName)
+            assertEquals(fredHireDate, john.hrInfo.hireDate)
 
-            val fredJohn = fred.mapAt(listOf(MiddleName)) { name: String? ->
-                require(name == null)
-                "John"
+            val sallyEmployeeNumber = 20000
+            val sallyHireDate = LocalDate.of(1995, 2, 20)
+            val sallyAge = 37
+            val sally = Manager(
+                FirstName to "Sally",
+                Age to sallyAge,
+                TheirJob to Job.MANAGER,
+                TheirHrInfo to HrInfo(
+                    EmployeeNumber to sallyEmployeeNumber,
+                    HireDate to sallyHireDate
+                ),
+                Reports to listOf(fred, john)
+            )
+            val sallyWithFred2 = sally.mapAt<Manager, Employee>(Reports[0]) { fred2 }
+            assertEquals(fred2, sallyWithFred2.reports[0])
+
+            val sallyLater = sallyWithFred2.mapAt(Reports[1], Age) { age: Int ->
+                age + 1
             }
-            assertEquals("John", fredJohn.middleName)
-            assertTrue(fredJohn.hrInfo === fred.hrInfo)
+            assertEquals(fred2, sallyLater.reports[0])
+            assertEquals("John", sallyLater.reports[1].firstName)
+            assertEquals(johnAge + 1, sallyLater.reports[1].age)
         }
     }
 
@@ -306,7 +312,7 @@ class JoyDataTest {
             val fredR = EmployeeR().apply {
                 firstName = "Fred"
                 age = 12
-                job = Job.CEO
+                job = Job.IC
                 hrInfo.run {
                     employeeNumber = fredEmployeeNumber
                     hireDate = fredHireDate
@@ -315,7 +321,7 @@ class JoyDataTest {
             val fred = fredR.toMix()
             assertEquals("Fred", fred.firstName)
             assertEquals(12, fred.age)
-            assertEquals(Job.CEO, fred.job)
+            assertEquals(Job.IC, fred.job)
             assertEquals(fredEmployeeNumber, fred.hrInfo.employeeNumber)
             assertEquals(fredHireDate, fred.hrInfo.hireDate)
         }
@@ -343,21 +349,14 @@ class JoyDataTest {
         fun `Remix_mapAt Role`() {
             val fred = PersonR(
                 FirstName to "Fred", Age to 11
-            ).mapAt(Age) { (it ?: 0) + 1 }
+            ).mapAt(Age) { age: Int -> age + 1 }
             assertEquals("Fred", fred.firstName)
             assertEquals(12, fred.age)
 
-            val doe = fred.mapAt(FirstName) {
-                require(it == "Fred")
-                null
+            val jack = fred.mapAt<PersonR, String>(FirstName) {
+                "Jack"
             }
-
-            val fred2 = doe.mapAt(FirstName) {
-                require(it == null)
-                "Fred"
-            }
-            assertEquals("Fred", fred2.firstName)
-            assertEquals(12, fred2.age)
+            assertEquals("Jack", jack.firstName)
         }
 
         @Test
@@ -367,7 +366,7 @@ class JoyDataTest {
             val fredR = EmployeeR().apply {
                 firstName = "Fred"
                 age = 12
-                job = Job.CEO
+                job = Job.IC
                 hrInfo.run {
                     employeeNumber = fredEmployeeNumber
                     hireDate = fredHireDate
@@ -376,13 +375,11 @@ class JoyDataTest {
             val fred = fredR.toMix()
             assertEquals("Fred", fred.firstName)
             assertEquals(12, fred.age)
-            assertEquals(Job.CEO, fred.job)
+            assertEquals(Job.IC, fred.job)
             assertEquals(fredEmployeeNumber, fred.hrInfo.employeeNumber)
             assertEquals(fredHireDate, fred.hrInfo.hireDate)
 
-            val fred2 = fred.mapAt(
-                listOf(TheirHrInfo, EmployeeNumber)
-            ) { en: Int? -> (en ?: 0) + 1 }
+            val fred2 = fred.mapAt(TheirHrInfo, EmployeeNumber) { en: Int -> en + 1 }
             assertEquals("Fred", fred2.firstName)
             assertEquals(fredHireDate, fred2.hrInfo.hireDate)
             assertEquals(fredEmployeeNumber + 1, fred2.hrInfo.employeeNumber)
@@ -395,7 +392,7 @@ class JoyDataTest {
             assertEquals("Fred", olderFred.firstName)
             assertEquals(fredHireDate, olderFred.hrInfo.hireDate)
 
-            val jack = fred.mapAt(listOf(FirstName)) { name: String? ->
+            val jack = fred.mapAt(FirstName) { name: String ->
                 require(name == "Fred")
                 "Jack"
             }
