@@ -89,7 +89,7 @@ class JoyDataTest {
 
         @Test
         fun `constructs and gets`() {
-            val fred = Mix(FirstName to "Fred", Age to 12)
+            val fred = Mix(FirstName has "Fred", Age has 12)
             assertEquals("Fred", fred[FirstName])
             assertNull(fred[MiddleName])
             assertEquals(12, fred[Age])
@@ -97,12 +97,12 @@ class JoyDataTest {
 
         @Test
         fun `equals and hashCode`() {
-            val fredMix1 = Mix(FirstName to "Fred", Age to 12)
-            val fredMix2 = Mix(FirstName to "Fred", Age to 12)
-            val fredPerson1 = Person(FirstName to "Fred", Age to 12)
-            val fredPerson2 = Person(FirstName to "Fred", Age to 12)
-            val georgeMix = Mix(FirstName to "George", Age to 12)
-            val georgePerson = Person(FirstName to "George", Age to 12)
+            val fredMix1 = Mix(FirstName has "Fred", Age has 12)
+            val fredMix2 = Mix(FirstName has "Fred", Age has 12)
+            val fredPerson1 = Person(FirstName has "Fred", Age has 12)
+            val fredPerson2 = Person(FirstName has "Fred", Age has 12)
+            val georgeMix = Mix(FirstName has "George", Age has 12)
+            val georgePerson = Person(FirstName has "George", Age has 12)
 
             assertEquals(fredMix1, fredMix2)
             assertEquals(fredMix1.hashCode(), fredMix2.hashCode())
@@ -120,12 +120,12 @@ class JoyDataTest {
 
         @Test
         fun `subclass can delegate properties to roles`() {
-            val fred = Person(FirstName to "Fred", Age to 12)
+            val fred = Person(FirstName has "Fred", Age has 12)
             assertEquals("Fred", fred.firstName)
             assertNull(fred.middleName)
             assertEquals(12, fred.age)
 
-            val jane = Person(FirstName to "Jane", MiddleName to "Ann", Age to 14)
+            val jane = Person(FirstName has "Jane", MiddleName has "Ann", Age has 14)
             assertEquals("Jane", jane.firstName)
             assertEquals("Ann", jane.middleName)
             assertEquals(14, jane.age)
@@ -134,18 +134,18 @@ class JoyDataTest {
         @Test
         fun `Constructing Mix subclass with missing delegated property throws IllegalArgumentException`() {
             assertThrows(IllegalArgumentException::class.java) {
-                Person(FirstName to "Fred")
+                Person(FirstName has "Fred")
             }
         }
 
         @Test
         fun `Mix_with basics`() {
-            val fred = Person(FirstName to "Fred", Age to 11).with(Age to 12)
+            val fred = Person(FirstName has "Fred", Age has 11).with(Age has 12)
             assertEquals("Fred", fred.firstName)
             assertNull(fred.middleName)
             assertEquals(12, fred.age)
 
-            val fredJohn = fred.with(MiddleName to "John")
+            val fredJohn = fred.with(MiddleName has "John")
             assertEquals("Fred", fredJohn.firstName)
             assertEquals("John", fredJohn.middleName)
             assertEquals(12, fredJohn.age)
@@ -153,17 +153,17 @@ class JoyDataTest {
 
         @Test
         fun `Mix_with preserves runtime class`() {
-            val fredMix: Mix = Person(FirstName to "Fred", Age to 11)
+            val fredMix: Mix = Person(FirstName has "Fred", Age has 11)
             assertEquals(Person::class, fredMix::class)
 
-            val fredMixWith = fredMix.with(Age to 12)
+            val fredMixWith = fredMix.with(Age has 12)
             assertEquals(Person::class, fredMixWith::class)
         }
 
         @Test
         fun `Mix_mapAt Role`() {
             val fred = Person(
-                FirstName to "Fred", Age to 11
+                FirstName has "Fred", Age has 11
             ).mapAt(Age) { age: Int -> age + 1 }
             assertEquals("Fred", fred.firstName)
             assertNull(fred.middleName)
@@ -176,12 +176,12 @@ class JoyDataTest {
             val fredEmployeeNumber = 10000
             val fredAge = 35
             val fred = Employee(
-                FirstName to "Fred",
-                Age to fredAge,
-                TheirJob to Job.IC,
-                TheirHrInfo to HrInfo(
-                    EmployeeNumber to fredEmployeeNumber,
-                    HireDate to fredHireDate
+                FirstName has "Fred",
+                Age has fredAge,
+                TheirJob has Job.IC,
+                TheirHrInfo has HrInfo(
+                    EmployeeNumber has fredEmployeeNumber,
+                    HireDate has fredHireDate
                 )
             )
             val fred2 = fred.mapAt(TheirHrInfo, EmployeeNumber) { en: Int -> en + 1 }
@@ -192,7 +192,7 @@ class JoyDataTest {
 
             val johnAge = 40
             val john = fred.mapAt() { e: Employee ->
-                e.with(FirstName to "John", Age to johnAge)
+                e.with(FirstName has "John", Age has johnAge)
             }
             assertEquals(johnAge, john.age)
             assertEquals("John", john.firstName)
@@ -203,14 +203,14 @@ class JoyDataTest {
             val sallyHireDate = LocalDate.of(1995, 2, 20)
             val sallyAge = 37
             val sally = Manager(
-                FirstName to "Sally",
-                Age to sallyAge,
-                TheirJob to Job.MANAGER,
-                TheirHrInfo to HrInfo(
-                    EmployeeNumber to sallyEmployeeNumber,
-                    HireDate to sallyHireDate
+                FirstName has "Sally",
+                Age has sallyAge,
+                TheirJob has Job.MANAGER,
+                TheirHrInfo has HrInfo(
+                    EmployeeNumber has sallyEmployeeNumber,
+                    HireDate has sallyHireDate
                 ),
-                Reports to listOf(fred, john)
+                Reports has listOf(fred, john)
             )
             val sallyWithFred2 = sally.mapAt<Manager, Employee>(Reports[0]) { fred2 }
             assertEquals(fred2, sallyWithFred2.reports[0])
@@ -229,7 +229,7 @@ class JoyDataTest {
 
         @Test
         fun `constructs, gets, and sets`() {
-            val person = Remix(FirstName to "Fred")
+            val person = Remix(FirstName has "Fred")
             assertEquals("Fred", person[FirstName])
             assertNull(person[Age])
             person[Age] = 12
@@ -238,16 +238,16 @@ class JoyDataTest {
 
         @Test
         fun `equals and hashCode`() {
-            val fredRemix1 = Remix(FirstName to "Fred", Age to 12)
-            val fredRemix2 = Remix(FirstName to "Fred", Age to 12)
-            val fredMix = Mix(FirstName to "Fred", Age to 12)
+            val fredRemix1 = Remix(FirstName has "Fred", Age has 12)
+            val fredRemix2 = Remix(FirstName has "Fred", Age has 12)
+            val fredMix = Mix(FirstName has "Fred", Age has 12)
 
-            val fredPerson = Person(FirstName to "Fred", Age to 12)
-            val fredPersonR1 = PersonR(FirstName to "Fred", Age to 12)
-            val fredPersonR2 = PersonR(FirstName to "Fred", Age to 12)
+            val fredPerson = Person(FirstName has "Fred", Age has 12)
+            val fredPersonR1 = PersonR(FirstName has "Fred", Age has 12)
+            val fredPersonR2 = PersonR(FirstName has "Fred", Age has 12)
 
-            val georgeRemix = Remix(FirstName to "George", Age to 12)
-            val georgePersonR = PersonR(FirstName to "George", Age to 12)
+            val georgeRemix = Remix(FirstName has "George", Age has 12)
+            val georgePersonR = PersonR(FirstName has "George", Age has 12)
 
             assertEquals(fredRemix1, fredRemix2)
             assertEquals(fredRemix1.hashCode(), fredRemix2.hashCode())
@@ -273,7 +273,7 @@ class JoyDataTest {
 
         @Test
         fun `subclass can delegate properties to roles`() {
-            val person = PersonR(FirstName to "Fred")
+            val person = PersonR(FirstName has "Fred")
             assertEquals("Fred", person.firstName)
             assertNull(person.age)
             person.age = 12
@@ -282,7 +282,7 @@ class JoyDataTest {
 
         @Test
         fun `subclass automatically constructs Remix roles`() {
-            val employee = EmployeeR(FirstName to "Fred")
+            val employee = EmployeeR(FirstName has "Fred")
             assertNotNull(employee.hrInfo)
             assertEquals(HrInfoR(), employee.hrInfo)
         }
@@ -328,27 +328,27 @@ class JoyDataTest {
 
         @Test
         fun `Remix_with basics`() {
-            val doe = PersonR(Age to 11)
+            val doe = PersonR(Age has 11)
             assertNull(doe.firstName)
 
-            val fred = doe.with(FirstName to "Fred", Age to 12)
+            val fred = doe.with(FirstName has "Fred", Age has 12)
             assertEquals("Fred", fred.firstName)
             assertEquals(12, fred.age)
         }
 
         @Test
         fun `Remix_with preserves runtime class`() {
-            val fredRemix: Remix = PersonR(FirstName to "Fred", Age to 11)
+            val fredRemix: Remix = PersonR(FirstName has "Fred", Age has 11)
             assertEquals(PersonR::class, fredRemix::class)
 
-            val fredRemixWith = fredRemix.with(Age to 12)
+            val fredRemixWith = fredRemix.with(Age has 12)
             assertEquals(PersonR::class, fredRemixWith::class)
         }
 
         @Test
         fun `Remix_mapAt Role`() {
             val fred = PersonR(
-                FirstName to "Fred", Age to 11
+                FirstName has "Fred", Age has 11
             ).mapAt(Age) { age: Int -> age + 1 }
             assertEquals("Fred", fred.firstName)
             assertEquals(12, fred.age)
@@ -386,7 +386,7 @@ class JoyDataTest {
 
             val olderFred = fred.mapAt(listOf()) { e: Employee? ->
                 require(e != null)
-                e.with(Age to 40)
+                e.with(Age has 40)
             }
             assertEquals(40, olderFred.age)
             assertEquals("Fred", olderFred.firstName)

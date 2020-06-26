@@ -285,11 +285,15 @@ class RoleMixDelegate<V>(private val value: V) : ReadOnlyProperty<Mix, V> {
 
 data class Part constructor(val keyName: String, val value: Any)
 
+@Deprecated(
+    "Instead use `ThisRole has value` to be explicitly different from Kotlin's standard `to`.",
+    ReplaceWith("has"))
+infix fun <V : Any> Role<V>.to(value: V): Part = has(value)
+
 /**
- * TODO: Change this name to `has`?
  * TODO: Provide a counterpart for `MixRole`.
  */
-infix fun <V : Any> Role<V>.to(value: V): Part {
+infix fun <V : Any> Role<V>.has(value: V): Part {
     return Part(qualifiedName, value)
 }
 
