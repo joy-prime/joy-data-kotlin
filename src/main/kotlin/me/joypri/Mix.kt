@@ -66,7 +66,7 @@ fun <M : MixParts, V : Any> M.mapAt(path: RolePath, f: (V) -> V): M {
                 require(oldHeadValue is List<*>) {
                     "because the next role in the path is indexed, needed a List at $pathHead but got $oldHeadValue"
                 }
-                val index = pathHead.index
+                val index = (pathHead as RoleAtIndex<Role<List<*>>, *>).index
                 require(index in 0 until oldHeadValue.size) {
                     "invalid index $index; existing list at $pathHead has size ${oldHeadValue.size}"
                 }
@@ -264,7 +264,7 @@ abstract class Role<V> : Named() {
     }
 }
 
-class RoleAtIndex<R : Role<V>, V>(
+class RoleAtIndex<R : Role<List<V>>, V>(
     val role: R,
     val index: Int
 ) : Role<V>() {
@@ -274,7 +274,7 @@ class RoleAtIndex<R : Role<V>, V>(
     }
 }
 
-operator fun <V, R : Role<V>> R.get(i: Int): RoleAtIndex<R, V> =
+operator fun <V, R : Role<List<V>>> R.get(i: Int): RoleAtIndex<R, V> =
     RoleAtIndex(this, i)
 
 typealias RolePath = List<Role<*>>
