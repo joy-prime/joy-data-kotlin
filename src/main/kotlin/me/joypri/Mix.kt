@@ -29,6 +29,14 @@ inline operator fun <M : MixParts, reified V> M.get(role: Role<V>): V? {
 fun <M : MixParts> M.with(vararg overrides: Part): M =
     this::class.constructFromParts(parts + overrides)
 
+inline fun <M : MixParts, reified V : Any> M.mapAt(role: Role<V>, f: (V) -> V): M {
+    val oldValue = get(role)
+    require(oldValue != null) {
+        "We only support mapping an existing role value, but $this[$role] is null."
+    }
+    return with(role to f(oldValue))
+}
+
 /**
  * Returns an instance of this class with the value at `path` mapped through `f`.
  * There must be an existing value at `path` (and hence every step along `path`),
@@ -41,64 +49,8 @@ fun <M : MixParts> M.with(vararg overrides: Part): M =
  * instances may be problematic for `Remix`s.
  */
 @Suppress("UNCHECKED_CAST")
-fun <M : MixParts, V : Any> M.mapAt(path: RolePath, f: (V) -> V): M {
-    if (path.isEmpty()) {
-        return f(this as V) as M
-    } else {
-        val pathHead = path.first()
-
-        fun mapValue(v: Any): Any =
-            if (path.size == 1) {
-                f(v as V)
-            } else {
-                require(v is MixParts) {
-                    "expected MixParts at $pathHead but got $v"
-                }
-                v.mapAt(path.drop(1), f)
-            }
-
-        val oldHeadValue: Any? = this.valueByQualifiedName[pathHead.qualifiedName]
-        require(oldHeadValue != null) {
-            "no value at $pathHead"
-        }
-        val newHeadValue: Any =
-            if (pathHead is RoleAtIndex<*, *>) {
-                require(oldHeadValue is List<*>) {
-                    "because the next role in the path is indexed, needed a List at $pathHead but got $oldHeadValue"
-                }
-                val index = (pathHead as RoleAtIndex<Role<List<*>>, *>).index
-                require(index in 0 until oldHeadValue.size) {
-                    "invalid index $index; existing list at $pathHead has size ${oldHeadValue.size}"
-                }
-                oldHeadValue.mapIndexed { i, v ->
-                    if (i == index) {
-                        require(v != null) {
-                            "unexpected null at $pathHead"
-                        }
-                        mapValue(v)
-                    } else {
-                        v
-                    }
-                }
-            } else {
-                mapValue(oldHeadValue)
-            }
-
-        val newParts: List<Part> =
-            // Transform existing part.
-            parts.map {
-                if (it.keyName == pathHead.qualifiedName) {
-                    Part(it.keyName, newHeadValue)
-                } else {
-                    it
-                }
-            }
-        return this::class.constructFromParts(newParts)
-    }
-}
-
-fun <M : MixParts, V : Any> M.mapAt(vararg role: Role<*>, f: (V) -> V): M =
-    mapAt(role.toList(), f)
+fun <M : MixParts, V : Any> M.mapAt(path: RolePath<V>, f: (V) -> V): M =
+    path.mapHere(this, f)
 
 fun <R : Any> KClass<R>.constructFromParts(parts: List<Part>): R {
     val ctor = primaryConstructor
@@ -253,6 +205,10 @@ abstract class Named {
     open val qualifiedName: String =
         (this::class.qualifiedName
             ?: throw IllegalStateException("Named subclass must have a qualifiedName; it is null'"))
+
+    override fun toString(): String {
+        return qualifiedName
+    }
 }
 
 abstract class Role<V> : Named() {
@@ -264,20 +220,117 @@ abstract class Role<V> : Named() {
     }
 }
 
-class RoleAtIndex<R : Role<List<V>>, V>(
-    val role: R,
-    val index: Int
-) : Role<V>() {
-    override val qualifiedName: String = role.qualifiedName
-    override fun toString(): String {
-        return "$role[$index]"
+sealed class RolePathSegment
+
+class AtRole(val role: Role<*>) : RolePathSegment()
+
+class AtIndex(val index: Int) : RolePathSegment()
+
+class RolePath<V : Any> private constructor(
+    val elements: List<RolePathSegment>
+) {
+    @Suppress("UNCHECKED_CAST")
+    fun <M : MixParts> mapHere(mix: M, f: (V) -> V): M =
+        mapPathElements(mix, elements, f, listOf()) as M
+
+    constructor (role: Role<V>) :
+            this(listOf(AtRole(role)))
+
+    constructor (other: RolePath<List<V>>, index: Int) :
+            this(other.elements + AtIndex(index))
+
+    companion object {
+        fun <M : MixParts, V : Any> make(mixPath: RolePath<M>, role: Role<V>): RolePath<V> =
+            RolePath(mixPath.elements + AtRole(role))
     }
 }
 
-operator fun <V, R : Role<List<V>>> R.get(i: Int): RoleAtIndex<R, V> =
-    RoleAtIndex(this, i)
+private fun elementsToString(elements: List<RolePathSegment>): String {
+    val builder = StringBuilder()
+    var isFirst = true
+    for (e in elements) {
+        when (e) {
+            is AtRole -> {
+                if (!isFirst) {
+                    builder.append(" + ")
+                }
+                builder.append(e.role.toString())
+            }
+            is AtIndex ->
+                builder.append("[${e.index}]")
+        }
+        isFirst = false
+    }
+    return builder.toString()
+}
 
-typealias RolePath = List<Role<*>>
+@Suppress("UNCHECKED_CAST")
+private fun <V : Any> mapPathElements(
+    from: Any,
+    elements: List<RolePathSegment>,
+    f: (V) -> V,
+    context: List<RolePathSegment>
+): Any {
+    if (elements.isEmpty()) {
+        return f(from as V)
+    } else {
+        val e = elements.first()
+
+        fun recur(oldValue: Any?): Any {
+            require(oldValue != null) {
+                "required non-null value at ${elementsToString(context)}"
+            }
+            return mapPathElements(
+                oldValue,
+                elements.drop(1),
+                f,
+                context + e
+            )
+        }
+        when (e) {
+            is AtRole -> {
+                require(from is MixParts) {
+                    "required MixParts at ${elementsToString(context)} but found $from"
+                }
+                val oldValue = from.valueByQualifiedName[e.role.qualifiedName]
+                return from.with(
+                    Part(
+                        e.role.qualifiedName,
+                        recur(oldValue)
+                    )
+                )
+            }
+            is AtIndex -> {
+                require(from is List<*>) {
+                    "required List at ${elementsToString(context)} but found $from"
+                }
+                val oldValue = from[e.index]
+                return (from as List<Any>).mapIndexed { i: Int, v: Any ->
+                    if (i == e.index) {
+                        recur(oldValue)
+                    } else {
+                        v
+                    }
+                }
+            }
+        }
+    }
+}
+
+operator fun <V : Any> Role<V>.unaryPlus(): RolePath<V> =
+    RolePath(this)
+
+operator fun <M : MixParts, V : Any> RolePath<M>.plus(role: Role<V>): RolePath<V> =
+    RolePath.make(this, role)
+
+operator fun <M : MixParts, V : Any> Role<M>.plus(role: Role<V>): RolePath<V> =
+    +this + role
+
+operator fun <V : Any> Role<List<V>>.get(index: Int): RolePath<V> =
+    RolePath(+this, index)
+
+operator fun <V : Any> RolePath<List<V>>.get(index: Int): RolePath<V> =
+    RolePath(this, index)
 
 class RoleMixDelegate<V>(private val value: V) : ReadOnlyProperty<Mix, V> {
     override operator fun getValue(thisRef: Mix, property: KProperty<*>): V = value

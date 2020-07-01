@@ -184,20 +184,13 @@ class JoyDataTest {
                     HireDate to fredHireDate
                 )
             )
-            val fred2 = fred.mapAt(TheirHrInfo, EmployeeNumber) { en: Int -> en + 1 }
+            val fred2 = fred.mapAt(TheirHrInfo + EmployeeNumber) { it + 1 }
             assertEquals("Fred", fred2.firstName)
             assertNull(fred2.middleName)
             assertEquals(fredHireDate, fred2.hrInfo.hireDate)
             assertEquals(fredEmployeeNumber + 1, fred2.hrInfo.employeeNumber)
 
-            val johnAge = 40
-            val john = fred.mapAt() { e: Employee ->
-                e.with(FirstName to "John", Age to johnAge)
-            }
-            assertEquals(johnAge, john.age)
-            assertEquals("John", john.firstName)
-            assertNull(john.middleName)
-            assertEquals(fredHireDate, john.hrInfo.hireDate)
+            val john = fred.with(FirstName to "John")
 
             val sallyEmployeeNumber = 20000
             val sallyHireDate = LocalDate.of(1995, 2, 20)
@@ -212,15 +205,13 @@ class JoyDataTest {
                 ),
                 Reports to listOf(fred, john)
             )
-            val sallyWithFred2 = sally.mapAt<Manager, Employee>(Reports[0]) { fred2 }
+            val sallyWithFred2 = sally.mapAt(Reports[0]) { fred2 }
             assertEquals(fred2, sallyWithFred2.reports[0])
 
-            val sallyLater = sallyWithFred2.mapAt(Reports[1], Age) { age: Int ->
-                age + 1
-            }
+            val sallyLater = sallyWithFred2.mapAt(Reports[1] + Age) { it + 1 }
             assertEquals(fred2, sallyLater.reports[0])
             assertEquals("John", sallyLater.reports[1].firstName)
-            assertEquals(johnAge + 1, sallyLater.reports[1].age)
+            assertEquals(fredAge + 1, sallyLater.reports[1].age)
         }
     }
 
@@ -379,21 +370,13 @@ class JoyDataTest {
             assertEquals(fredEmployeeNumber, fred.hrInfo.employeeNumber)
             assertEquals(fredHireDate, fred.hrInfo.hireDate)
 
-            val fred2 = fred.mapAt(TheirHrInfo, EmployeeNumber) { en: Int -> en + 1 }
+            val fred2 = fred.mapAt(TheirHrInfo + EmployeeNumber) { it + 1 }
             assertEquals("Fred", fred2.firstName)
             assertEquals(fredHireDate, fred2.hrInfo.hireDate)
             assertEquals(fredEmployeeNumber + 1, fred2.hrInfo.employeeNumber)
 
-            val olderFred = fred.mapAt(listOf()) { e: Employee? ->
-                require(e != null)
-                e.with(Age to 40)
-            }
-            assertEquals(40, olderFred.age)
-            assertEquals("Fred", olderFred.firstName)
-            assertEquals(fredHireDate, olderFred.hrInfo.hireDate)
-
-            val jack = fred.mapAt(FirstName) { name: String ->
-                require(name == "Fred")
+            val jack = fred.mapAt(FirstName) {
+                require(it == "Fred")
                 "Jack"
             }
             assertEquals("Jack", jack.firstName)
