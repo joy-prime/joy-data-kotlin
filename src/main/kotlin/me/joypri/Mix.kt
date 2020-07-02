@@ -222,9 +222,13 @@ abstract class Role<V> : Named() {
 
 sealed class RolePathSegment
 
-class AtRole(val role: Role<*>) : RolePathSegment()
+data class AtRole(val role: Role<*>) : RolePathSegment() {
+    override fun toString(): String = role.toString()
+}
 
-class AtIndex(val index: Int) : RolePathSegment()
+data class AtIndex(val index: Int) : RolePathSegment() {
+    override fun toString(): String = "[$index]"
+}
 
 class RolePath<V : Any> private constructor(
     val elements: List<RolePathSegment>
@@ -275,10 +279,11 @@ private fun <V : Any> mapPathElements(
         return f(from as V)
     } else {
         val e = elements.first()
+        val contextStr by lazy { elementsToString(context) + e }
 
         fun recur(oldValue: Any?): Any {
             require(oldValue != null) {
-                "required non-null value at ${elementsToString(context)}"
+                "required non-null value at $contextStr"
             }
             return mapPathElements(
                 oldValue,
@@ -290,7 +295,7 @@ private fun <V : Any> mapPathElements(
         when (e) {
             is AtRole -> {
                 require(from is MixParts) {
-                    "required MixParts at ${elementsToString(context)} but found $from"
+                    "required MixParts at $contextStr but found $from"
                 }
                 val oldValue = from.valueByQualifiedName[e.role.qualifiedName]
                 return from.with(
@@ -302,7 +307,10 @@ private fun <V : Any> mapPathElements(
             }
             is AtIndex -> {
                 require(from is List<*>) {
-                    "required List at ${elementsToString(context)} but found $from"
+                    "required List at $contextStr but found $from"
+                }
+                require(e.index in 0 until from.size) {
+                    "outside list range (0 until ${from.size}) at $contextStr"
                 }
                 val oldValue = from[e.index]
                 return (from as List<Any>).mapIndexed { i: Int, v: Any ->

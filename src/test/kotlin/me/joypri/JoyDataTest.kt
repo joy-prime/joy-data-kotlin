@@ -8,10 +8,7 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import java.time.LocalDate
-import kotlin.test.assertEquals
-import kotlin.test.assertNotEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
+import kotlin.test.*
 
 enum class Job {
     IC,
@@ -220,7 +217,18 @@ class JoyDataTest {
             assertEquals(fred2, sallyLater.reports[0])
             assertEquals("John", sallyLater.reports[1].firstName)
             assertEquals(fredAge + 1, sallyLater.reports[1].age)
+
+            // val invalidPath = EmployeeNumber + TheirHrInfo
+            // val invalidPath = TheirHrInfo[0]
+            assertFailsWith(IllegalArgumentException::class) {
+                fred.mapAt(EmployeeNumber) { it + 1 }
+            }
+            assertFailsWith(IllegalArgumentException::class) {
+                sally.mapAt(Reports[2] + Age) { it + 1 }
+            }
         }
+
+
     }
 
     @Nested
