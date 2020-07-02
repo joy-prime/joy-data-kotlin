@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
+import java.lang.ClassCastException
 import java.time.LocalDate
 import kotlin.test.*
 
@@ -215,6 +216,13 @@ class JoyDataTest {
             assertFailsWith(IllegalArgumentException::class) {
                 fred.mapAt(EmployeeNumber) { it + 1 }
             }
+            val starProjectedIntPath = RolePath(Age) as RolePath<*>
+            @Suppress("UNCHECKED_CAST")
+            val pretendStringPath = starProjectedIntPath as RolePath<String>
+            assertFailsWith(ClassCastException::class) {
+                fred.mapAt(pretendStringPath) { "not an Int" }
+            }
+
             assertFailsWith(IllegalArgumentException::class) {
                 sally.mapAt(Reports[2] + Age) { it + 1 }
             }
