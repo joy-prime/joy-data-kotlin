@@ -4,6 +4,7 @@ import kotlin.properties.ReadOnlyProperty
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KClass
 import kotlin.reflect.KProperty
+import kotlin.reflect.full.isSubclassOf
 import kotlin.reflect.full.primaryConstructor
 
 interface MixParts {
@@ -235,36 +236,63 @@ data class AtIndex(val index: Int) : RolePathSegment() {
     override fun toString(): String = "[$index]"
 }
 
-class RolePath<V : Any> private constructor(
-    val elements: List<RolePathSegment>
+data class RolePath<V : Any> internal constructor(
+    val segments: List<RolePathSegment>
 ) {
-    @Suppress("UNCHECKED_CAST")
-    fun <M : MixParts> mapHere(mix: M, f: (V) -> V): M =
-        mapAt(mix, elements, f, listOf()) as M
-
-    @Suppress("UNCHECKED_CAST")
-    fun <M : MixParts> getHere(mix: M): V? =
-        getAt(mix, elements, listOf()) as V?
-
     constructor (role: Role<V>) :
             this(listOf(AtRole(role)))
 
     constructor (other: RolePath<List<V>>, index: Int) :
-            this(other.elements + AtIndex(index))
+            this(other.segments + AtIndex(index))
+
+    @Suppress("UNCHECKED_CAST")
+    fun <M : MixParts> mapHere(mix: M, f: (V) -> V): M =
+        mapAt(mix, segments, f, listOf()) as M
+
+    @Suppress("UNCHECKED_CAST")
+    fun <M : MixParts> getHere(mix: M): V? =
+        getAt(mix, segments, listOf()) as V?
+
+    /**
+     * Public only for use by internal inline functions; use `plus(other)` externally.
+     */
+    fun <R : Any> internalConcat(thisClass: KClass<V>, other: RolePath<R>): RolePath<R> {
+        require(thisClass.isSubclassOf(MixParts::class) || thisClass.isSubclassOf(List::class)) {
+            "left-hand-side value type must be MixParts or List but is $thisClass"
+        }
+        if (other.segments.isNotEmpty()) {
+            val first = other.segments.first()
+            if (thisClass.isSubclassOf(MixParts::class)) {
+                require(first is AtRole) {
+                    "for concatenating onto RolePath<MixParts>, other must start with a Role but is $other"
+                }
+            } else {
+                require(first is AtIndex) {
+                    "for concatenating onto RolePath<List<*>>, other must start with an index but is $other"
+                }
+            }
+        }
+        return RolePath(this.segments + other.segments)
+    }
+
+    override fun toString(): String {
+        return segmentsToString(segments)
+    }
+
 
     companion object {
         fun <M : MixParts, V : Any> make(mixPath: RolePath<M>, role: Role<V>): RolePath<V> =
-            RolePath(mixPath.elements + AtRole(role))
+            RolePath(mixPath.segments + AtRole(role))
 
         fun <V : Any> empty(): RolePath<V> =
             RolePath(listOf())
     }
 }
 
-private fun segmentsToString(elements: List<RolePathSegment>): String {
+private fun segmentsToString(segments: List<RolePathSegment>): String {
     val builder = StringBuilder()
     var isFirst = true
-    for (e in elements) {
+    for (e in segments) {
         when (e) {
             is AtRole -> {
                 if (!isFirst) {
@@ -279,6 +307,9 @@ private fun segmentsToString(elements: List<RolePathSegment>): String {
     }
     return builder.toString()
 }
+
+inline operator fun <reified L: Any, R: Any> RolePath<L>.plus(other: RolePath<R>): RolePath<R> =
+    this.internalConcat(L::class, other)
 
 @Suppress("UNCHECKED_CAST")
 private fun <V : Any> mapAt(
