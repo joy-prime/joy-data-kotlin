@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
-import java.lang.ClassCastException
 import java.time.LocalDate
 import kotlin.test.*
 
@@ -169,7 +168,8 @@ class JoyDataTest {
         }
 
         @Test
-        fun `Mix_mapAt RolePath`() {
+        fun `Mix _mapAt _with _get RolePath`() {
+            // TODO: It's time to create some fixtures and make these tests into nice specs.
             val fredHireDate = LocalDate.of(1990, 1, 25)
             val fredEmployeeNumber = 10000
             val fredAge = 35
@@ -182,11 +182,21 @@ class JoyDataTest {
                     HireDate of fredHireDate
                 )
             )
+            assertEquals(fred as Employee?, fred[RolePath.empty()])
+            assertEquals(fredAge, fred[+Age])
+            assertEquals(fredEmployeeNumber, fred[TheirHrInfo + EmployeeNumber])
+
             val fred2 = fred.mapAt(TheirHrInfo + EmployeeNumber) { it + 1 }
             assertEquals("Fred", fred2.firstName)
             assertNull(fred2.middleName)
             assertEquals(fredHireDate, fred2.hrInfo.hireDate)
             assertEquals(fredEmployeeNumber + 1, fred2.hrInfo.employeeNumber)
+
+            val fred3 = fred.with(
+                TheirHrInfo + EmployeeNumber,
+                fredEmployeeNumber + 1
+            )
+            assertEquals(fred2, fred3)
 
             val john = fred.with(FirstName to "John")
             val johnAge = 40
@@ -221,16 +231,21 @@ class JoyDataTest {
 
             // val invalidPath = EmployeeNumber + TheirHrInfo
             // val invalidPath = TheirHrInfo[0]
+            assertNull(fred[+EmployeeNumber])
             assertFailsWith(IllegalArgumentException::class) {
-                fred.mapAt(EmployeeNumber) { it + 1 }
+                fred.mapAt(+EmployeeNumber) { it + 1 }
             }
             val starProjectedIntPath = RolePath(Age) as RolePath<*>
+
             @Suppress("UNCHECKED_CAST")
             val pretendStringPath = starProjectedIntPath as RolePath<String>
             assertFailsWith(ClassCastException::class) {
                 fred.mapAt(pretendStringPath) { "not an Int" }
             }
 
+            assertFailsWith(IllegalArgumentException::class) {
+                sally[Reports[2] + Age]
+            }
             assertFailsWith(IllegalArgumentException::class) {
                 sally.mapAt(Reports[2] + Age) { it + 1 }
             }

@@ -48,9 +48,14 @@ inline fun <M : MixParts, reified V : Any> M.mapAt(role: Role<V>, f: (V) -> V): 
  * values in shallow copies, the complex mix of shared and new `MixParts`
  * instances may be problematic for `Remix`s.
  */
-@Suppress("UNCHECKED_CAST")
 fun <M : MixParts, V : Any> M.mapAt(path: RolePath<V>, f: (V) -> V): M =
     path.mapHere(this, f)
+
+fun <M : MixParts, V : Any> M.with(path: RolePath<V>, v: V): M =
+    mapAt(path) { v }
+
+operator fun <M : MixParts, V : Any> M.get(path: RolePath<V>): V? =
+    path.getHere(this)
 
 fun <R : Any> KClass<R>.constructFromParts(parts: List<Part>): R {
     val ctor = primaryConstructor
@@ -235,7 +240,11 @@ class RolePath<V : Any> private constructor(
 ) {
     @Suppress("UNCHECKED_CAST")
     fun <M : MixParts> mapHere(mix: M, f: (V) -> V): M =
-        mapPathElements(mix, elements, f, listOf()) as M
+        mapAt(mix, elements, f, listOf()) as M
+
+    @Suppress("UNCHECKED_CAST")
+    fun <M : MixParts> getHere(mix: M): V? =
+        getAt(mix, elements, listOf()) as V?
 
     constructor (role: Role<V>) :
             this(listOf(AtRole(role)))
@@ -246,10 +255,13 @@ class RolePath<V : Any> private constructor(
     companion object {
         fun <M : MixParts, V : Any> make(mixPath: RolePath<M>, role: Role<V>): RolePath<V> =
             RolePath(mixPath.elements + AtRole(role))
+
+        fun <V : Any> empty(): RolePath<V> =
+            RolePath(listOf())
     }
 }
 
-private fun elementsToString(elements: List<RolePathSegment>): String {
+private fun segmentsToString(elements: List<RolePathSegment>): String {
     val builder = StringBuilder()
     var isFirst = true
     for (e in elements) {
@@ -269,38 +281,38 @@ private fun elementsToString(elements: List<RolePathSegment>): String {
 }
 
 @Suppress("UNCHECKED_CAST")
-private fun <V : Any> mapPathElements(
+private fun <V : Any> mapAt(
     from: Any,
-    elements: List<RolePathSegment>,
+    segments: List<RolePathSegment>,
     f: (V) -> V,
     context: List<RolePathSegment>
 ): Any {
-    if (elements.isEmpty()) {
+    if (segments.isEmpty()) {
         return f(from as V)
     } else {
-        val e = elements.first()
-        val contextStr by lazy { elementsToString(context) + e }
+        val s = segments.first()
+        val contextStr by lazy { segmentsToString(context + s) }
 
         fun recur(oldValue: Any?): Any {
             require(oldValue != null) {
                 "required non-null value at $contextStr"
             }
-            return mapPathElements(
+            return mapAt(
                 oldValue,
-                elements.drop(1),
+                segments.drop(1),
                 f,
-                context + e
+                context + s
             )
         }
-        when (e) {
+        when (s) {
             is AtRole -> {
                 require(from is MixParts) {
                     "required MixParts at $contextStr but found $from"
                 }
-                val oldValue = from.valueByQualifiedName[e.role.qualifiedName]
+                val oldValue = from.valueByQualifiedName[s.role.qualifiedName]
                 return from.with(
                     Part(
-                        e.role.qualifiedName,
+                        s.role.qualifiedName,
                         recur(oldValue)
                     )
                 )
@@ -309,17 +321,60 @@ private fun <V : Any> mapPathElements(
                 require(from is List<*>) {
                     "required List at $contextStr but found $from"
                 }
-                require(e.index in 0 until from.size) {
+                require(s.index in 0 until from.size) {
                     "outside list range (0 until ${from.size}) at $contextStr"
                 }
-                val oldValue = from[e.index]
+                val oldValue = from[s.index]
                 return (from as List<Any>).mapIndexed { i: Int, v: Any ->
-                    if (i == e.index) {
+                    if (i == s.index) {
                         recur(oldValue)
                     } else {
                         v
                     }
                 }
+            }
+        }
+    }
+}
+
+@Suppress("UNCHECKED_CAST")
+private fun getAt(
+    from: Any,
+    segments: List<RolePathSegment>,
+    context: List<RolePathSegment>
+): Any? {
+    if (segments.isEmpty()) {
+        return from
+    } else {
+        val s = segments.first()
+        val contextStr by lazy { segmentsToString(context + s) }
+
+        fun recur(newFrom: Any?): Any? {
+            require(newFrom != null) {
+                "required non-null value at $contextStr"
+            }
+            return getAt(
+                newFrom,
+                segments.drop(1),
+                context + s
+            )
+        }
+        when (s) {
+            is AtRole -> {
+                require(from is MixParts) {
+                    "required MixParts at $contextStr but found $from"
+                }
+                val v = from.valueByQualifiedName[s.role.qualifiedName]
+                return if (segments.size == 1) v else recur(v)
+            }
+            is AtIndex -> {
+                require(from is List<*>) {
+                    "required List at $contextStr but found $from"
+                }
+                require(s.index in 0 until from.size) {
+                    "outside list range (0 until ${from.size}) at $contextStr"
+                }
+                return recur(from[s.index])
             }
         }
     }
