@@ -91,30 +91,30 @@ class JoyDataTest {
 
             // path to scalar concatenated with anything
             assertFailsWith(IllegalArgumentException::class) {
-                (+Age) + (+Age)
+                Age.toPath() + Age.toPath()
             }
             // path to List<*> concatenated with path that starts with AtRole
             assertFailsWith(IllegalArgumentException::class) {
-                (+Reports) + (+Age)
+                Reports.toPath() + Age.toPath()
             }
             // path to MixParts concatenated with path that starts with AtIndex
             assertFailsWith(IllegalArgumentException::class) {
-                +TheirHrInfo + employeeSub1
+                TheirHrInfo + employeeSub1
             }
 
             // LHS is empty
-            assertEquals(+Age, employeeHere + Age)
+            assertEquals(Age.toPath(), employeeHere + Age)
             assertEquals(employeeSub1, employeeListHere + employeeSub1)
 
             // RHS is empty
-            assertEquals(+Reports, +Reports + employeeListHere)
+            assertEquals(Reports.toPath(), Reports + employeeListHere)
             assertEquals(Reports[1], Reports[1] + employeeHere)
 
             // path to MixParts + path starting with AtRole
-            assertEquals(Reports[1] + Age, Reports[1] + (+Age))
+            assertEquals(Reports[1] + Age, Reports[1] + Age.toPath())
 
             // path to List<*> + path starting with AtIndex
-            assertEquals(Reports[1], +Reports + employeeSub1)
+            assertEquals(Reports[1], Reports + employeeSub1)
         }
     }
 
@@ -220,7 +220,7 @@ class JoyDataTest {
                 )
             )
             assertEquals(fred as Employee?, fred[RolePath.empty()])
-            assertEquals(fredAge, fred[+Age])
+            assertEquals(fredAge, fred[Age.toPath()])
             assertEquals(fredEmployeeNumber, fred[TheirHrInfo + EmployeeNumber])
 
             val fred2 = fred.mapAt(TheirHrInfo + EmployeeNumber) { it + 1 }
@@ -268,11 +268,11 @@ class JoyDataTest {
 
             // val invalidPath = EmployeeNumber + TheirHrInfo
             // val invalidPath = TheirHrInfo[0]
-            assertNull(fred[+EmployeeNumber])
+            assertNull(fred[EmployeeNumber.toPath()])
             assertFailsWith(IllegalArgumentException::class) {
-                fred.mapAt(+EmployeeNumber) { it + 1 }
+                fred.mapAt(EmployeeNumber.toPath()) { it + 1 }
             }
-            val starProjectedIntPath = RolePath(Age) as RolePath<*>
+            val starProjectedIntPath = Age.toPath() as RolePath<*>
 
             @Suppress("UNCHECKED_CAST")
             val pretendStringPath = starProjectedIntPath as RolePath<String>
@@ -418,7 +418,7 @@ class JoyDataTest {
             assertEquals("Fred", fred.firstName)
             assertEquals(12, fred.age)
 
-            val jack = fred.mapAt<PersonR, String>(FirstName) {
+            val jack = fred.mapAt(FirstName) {
                 "Jack"
             }
             assertEquals("Jack", jack.firstName)
