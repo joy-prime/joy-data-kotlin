@@ -82,6 +82,43 @@ class JoyDataTest {
     }
 
     @Nested
+    inner class RolePathTest {
+        @Test
+        fun plus() {
+            val employeeHere = RolePath.empty<Employee>()
+            val employeeListHere = RolePath.empty<List<Employee>>()
+            val employeeSub1 = RolePath(employeeListHere, 1)
+
+            // path to scalar concatenated with anything
+            assertFailsWith(IllegalArgumentException::class) {
+                (+Age) + (+Age)
+            }
+            // path to List<*> concatenated with path that starts with AtRole
+            assertFailsWith(IllegalArgumentException::class) {
+                (+Reports) + (+Age)
+            }
+            // path to MixParts concatenated with path that starts with AtIndex
+            assertFailsWith(IllegalArgumentException::class) {
+                +TheirHrInfo + employeeSub1
+            }
+
+            // LHS is empty
+            assertEquals(+Age, employeeHere + Age)
+            assertEquals(employeeSub1, employeeListHere + employeeSub1)
+
+            // RHS is empty
+            assertEquals(+Reports, +Reports + employeeListHere)
+            assertEquals(Reports[1], Reports[1] + employeeHere)
+
+            // path to MixParts + path starting with AtRole
+            assertEquals(Reports[1] + Age, Reports[1] + (+Age))
+
+            // path to List<*> + path starting with AtIndex
+            assertEquals(Reports[1], +Reports + employeeSub1)
+        }
+    }
+
+    @Nested
     inner class MixTest {
 
         @Test
@@ -250,8 +287,6 @@ class JoyDataTest {
                 sally.mapAt(Reports[2] + Age) { it + 1 }
             }
         }
-
-
     }
 
     @Nested
