@@ -308,6 +308,11 @@ private fun segmentsToString(segments: List<RolePathSegment>): String {
     return builder.toString()
 }
 
+fun <V : Any> Role<V>.toPath(): RolePath<V> = RolePath(this)
+
+inline operator fun <reified L : Any, R: Any> Role<L>.plus(other: RolePath<R>): RolePath<R> =
+    toPath().internalConcat(L::class, other)
+
 inline operator fun <reified L: Any, R: Any> RolePath<L>.plus(other: RolePath<R>): RolePath<R> =
     this.internalConcat(L::class, other)
 
@@ -411,17 +416,14 @@ private fun getAt(
     }
 }
 
-operator fun <V : Any> Role<V>.unaryPlus(): RolePath<V> =
-    RolePath(this)
-
 operator fun <M : MixParts, V : Any> RolePath<M>.plus(role: Role<V>): RolePath<V> =
     RolePath.make(this, role)
 
 operator fun <M : MixParts, V : Any> Role<M>.plus(role: Role<V>): RolePath<V> =
-    +this + role
+    this.toPath() + role
 
 operator fun <V : Any> Role<List<V>>.get(index: Int): RolePath<V> =
-    RolePath(+this, index)
+    RolePath(this.toPath(), index)
 
 operator fun <V : Any> RolePath<List<V>>.get(index: Int): RolePath<V> =
     RolePath(this, index)
