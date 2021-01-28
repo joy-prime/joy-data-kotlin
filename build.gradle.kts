@@ -2,7 +2,7 @@ group="org.joy.prime"
 version="0.0.1"
 
 plugins {
-    kotlin("jvm") version "1.3.72"
+    kotlin("jvm") version "1.4.21"
 }
 
 repositories {
@@ -10,7 +10,6 @@ repositories {
 }
 
 dependencies {
-    implementation(kotlin("stdlib-jdk8"))
     implementation(kotlin("reflect"))
     testImplementation(kotlin("test"))
     testImplementation(kotlin("test-junit"))
@@ -22,4 +21,8 @@ tasks.test {
 	testLogging {
 		events("passed", "skipped", "failed")
 	}
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    kotlinOptions.jvmTarget = "15"
 }
