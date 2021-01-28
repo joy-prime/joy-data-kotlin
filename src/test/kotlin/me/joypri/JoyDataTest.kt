@@ -235,11 +235,8 @@ class JoyDataTest {
             )
             assertEquals(fred2, fred3)
 
-            val john = fred.with(FirstName to "John")
             val johnAge = 40
-            val john = fred.mapAt() { e: Employee ->
-                e.with(FirstName of "John", Age of johnAge)
-            }
+            val john = fred.with(FirstName of "John", Age of johnAge)
             assertEquals(johnAge, john.age)
             assertEquals("John", john.firstName)
             assertNull(john.middleName)
@@ -264,7 +261,7 @@ class JoyDataTest {
             val sallyLater = sallyWithFred2.mapAt(Reports[1] + Age) { it + 1 }
             assertEquals(fred2, sallyLater.reports[0])
             assertEquals("John", sallyLater.reports[1].firstName)
-            assertEquals(fredAge + 1, sallyLater.reports[1].age)
+            assertEquals(johnAge + 1, sallyLater.reports[1].age)
 
             // val invalidPath = EmployeeNumber + TheirHrInfo
             // val invalidPath = TheirHrInfo[0]
@@ -449,12 +446,7 @@ class JoyDataTest {
             assertEquals(fredHireDate, fred2.hrInfo.hireDate)
             assertEquals(fredEmployeeNumber + 1, fred2.hrInfo.employeeNumber)
 
-            val jack = fred.mapAt(FirstName) {
-                require(it == "Fred")
-            val olderFred = fred.mapAt(listOf()) { e: Employee? ->
-                require(e != null)
-                e.with(Age of 40)
-            }
+            val olderFred = fred.with(Age of 40)
             assertEquals(40, olderFred.age)
             assertEquals("Fred", olderFred.firstName)
             assertEquals(fredHireDate, olderFred.hrInfo.hireDate)
