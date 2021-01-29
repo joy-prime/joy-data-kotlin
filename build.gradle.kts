@@ -1,4 +1,4 @@
-group="org.joy.prime"
+group="me.joypri"
 version="0.0.1"
 
 plugins {
