@@ -99,7 +99,7 @@ class JoyDataTest {
             }
             // path to MixParts concatenated with path that starts with AtIndex
             assertFailsWith(IllegalArgumentException::class) {
-                TheirHrInfo + employeeSub1
+                TheirHrInfo.toPath() + employeeSub1
             }
 
             // LHS is empty
