@@ -35,7 +35,7 @@ inline fun <M : MixParts, reified V : Any> M.mapAt(role: Role<V>, f: (V) -> V): 
     require(oldValue != null) {
         "We only support mapping an existing role value, but $this[$role] is null."
     }
-    return with(role to f(oldValue))
+    return with(role of f(oldValue))
 }
 
 /**
