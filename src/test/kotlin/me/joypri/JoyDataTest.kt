@@ -284,6 +284,20 @@ class JoyDataTest {
                 sally.mapAt(Reports[2] + Age) { it + 1 }
             }
         }
+        @Test
+        fun `Mix_roleDeclarations on this class`() {
+            val expectedPersonRoles = setOf(
+                RoleDeclaration(FirstName, false),
+                RoleDeclaration(MiddleName, true),
+                RoleDeclaration(Age, false),
+            )
+            assertEquals(expectedPersonRoles, roleDeclarations(Person::class))
+        }
+
+        @Test
+        fun `Mix_roleDeclarations include superclass`() {
+
+        }
     }
 
     @Nested

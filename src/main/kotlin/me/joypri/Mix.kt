@@ -4,8 +4,11 @@ import kotlin.properties.ReadOnlyProperty
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KClass
 import kotlin.reflect.KProperty
+import kotlin.reflect.KProperty1
+import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.full.isSubclassOf
 import kotlin.reflect.full.primaryConstructor
+import kotlin.reflect.jvm.isAccessible
 
 interface MixParts {
     val valueByQualifiedName: Map<String, Any>
@@ -58,11 +61,17 @@ fun <M : MixParts, V : Any> M.with(path: RolePath<V>, v: V): M =
 operator fun <M : MixParts, V : Any> M.get(path: RolePath<V>): V? =
     path.getHere(this)
 
-fun <R : Any> KClass<R>.constructFromParts(parts: List<Part>): R {
+fun <T : Any> KClass<T>.constructFromParts(parts: List<Part>): T {
     val ctor = primaryConstructor
         ?: throw IllegalArgumentException("$this has no primary constructor")
     return ctor.call(parts.toTypedArray())
 }
+
+/**
+ * If present in a `Mix`, flags it as having been constructed just for reflection.
+ * This disables error-checking for missing `Role`s.
+ */
+object ConstructedForReflection : Role<Unit>()
 
 /**
  * An immutable heterogeneous map from `Role<V>` to `V`. If any of the provided `parts` have the same
@@ -73,11 +82,14 @@ fun <R : Any> KClass<R>.constructFromParts(parts: List<Part>): R {
  */
 open class Mix(vararg parts: Part) : MixParts {
 
-    override val valueByQualifiedName: Map<String, Any> =
+    final override val valueByQualifiedName: Map<String, Any> =
         parts.associate { it.keyName to it.value }
 
+    val constructedForReflection =
+        valueByQualifiedName.containsKey(ConstructedForReflection.qualifiedName)
+
     operator fun <V> Role<V>.unaryPlus(): OptionalRoleMixDelegateProvider<V> =
-        OptionalRoleMixDelegateProvider(qualifiedName)
+        OptionalRoleMixDelegateProvider(this)
 
     override fun equals(other: Any?): Boolean =
         other is Mix && other.javaClass == javaClass
@@ -87,11 +99,11 @@ open class Mix(vararg parts: Part) : MixParts {
         31 * valueByQualifiedName.hashCode() + javaClass.hashCode()
 }
 
-class OptionalRoleMixDelegateProvider<V>(private val qualifiedName: String) {
-    operator fun provideDelegate(thisRef: Mix, prop: KProperty<*>): RoleMixDelegate<V?> {
-        val anyValue = thisRef.valueByQualifiedName[qualifiedName]
+class OptionalRoleMixDelegateProvider<V>(private val role: Role<V>) {
+    operator fun provideDelegate(thisRef: Mix, prop: KProperty<*>): OptionalRoleMixDelegate<V> {
+        val anyValue = thisRef.valueByQualifiedName[role.qualifiedName]
         @Suppress("UNCHECKED_CAST")
-        return RoleMixDelegate(anyValue as V?)
+        return OptionalRoleMixDelegate(role, anyValue as V?)
     }
 }
 
@@ -145,11 +157,11 @@ open class Remix(vararg parts: Part) : MixParts {
      */
     open fun toMix(): Mix = Mix(*mixParts())
 
-    operator fun <V> Role<V>.unaryPlus(): RoleRemixDelegateProvider<V?> =
-        RoleRemixDelegateProvider(qualifiedName)
+    operator fun <V> Role<V>.unaryPlus(): RoleRemixDelegateProvider<V> =
+        RoleRemixDelegateProvider(this)
 
-    operator fun <M : Any, R : Any> MixRole<M, R>.not(): MixRoleRemixDelegateProvider<R> =
-        MixRoleRemixDelegateProvider(qualifiedName)
+    operator fun <M : Any, R : Any> MixRole<M, R>.not(): MixRoleRemixDelegateProvider<M, R> =
+        MixRoleRemixDelegateProvider(this)
 
     override fun equals(other: Any?): Boolean =
         other is Remix && other.javaClass == javaClass
@@ -159,51 +171,21 @@ open class Remix(vararg parts: Part) : MixParts {
         31 * valueByQualifiedName.hashCode() + javaClass.hashCode()
 }
 
-// The type name VN means nullable value.
-
-class RoleRemixDelegateProvider<VN>(private val qualifiedName: String) {
-    operator fun provideDelegate(thisRef: Remix, prop: KProperty<*>): RoleRemixDelegate<VN> =
-        RoleRemixDelegate(qualifiedName)
-}
-
-class RoleRemixDelegate<VN>(private val qualifiedName: String) : ReadWriteProperty<Remix, VN> {
-    override operator fun getValue(thisRef: Remix, property: KProperty<*>): VN {
-        @Suppress("UNCHECKED_CAST")
-        return thisRef.valueByQualifiedName[qualifiedName] as VN
-    }
-
-    override operator fun setValue(thisRef: Remix, property: KProperty<*>, value: VN) {
-        if (value == null) {
-            thisRef.valueByQualifiedName.remove(qualifiedName)
-        } else {
-            thisRef.valueByQualifiedName[qualifiedName] = value as Any
-        }
-    }
+class RoleRemixDelegateProvider<V>(private val role: Role<V>) {
+    operator fun provideDelegate(thisRef: Remix, prop: KProperty<*>): RoleRemixDelegate<V> =
+        RoleRemixDelegate(role)
 }
 
 @Suppress("unused") // The unused warning for R is a lie; R is used in the upcoming extension function.
-class MixRoleRemixDelegateProvider<R>(val qualifiedName: String)
+class MixRoleRemixDelegateProvider<M, R>(val role: Role<M>)
 
-inline operator fun <reified R : Any> MixRoleRemixDelegateProvider<R>.provideDelegate(
+inline operator fun <M : Mix, reified R : Remix>
+        MixRoleRemixDelegateProvider<M, R>.provideDelegate(
     thisRef: Remix,
     prop: KProperty<*>
-): MixRoleRemixDelegate<R> {
-    return MixRoleRemixDelegate(qualifiedName) {
+): MixRoleRemixDelegate<M, R> {
+    return MixRoleRemixDelegate(role) {
         R::class.constructFromParts(listOf())
-    }
-}
-
-class MixRoleRemixDelegate<R : Any>(
-    private val qualifiedName: String,
-    private val cons: () -> R
-) : ReadWriteProperty<Remix, R> {
-    override operator fun getValue(thisRef: Remix, property: KProperty<*>): R {
-        @Suppress("UNCHECKED_CAST")
-        return thisRef.valueByQualifiedName.computeIfAbsent(qualifiedName) { cons() } as R
-    }
-
-    override operator fun setValue(thisRef: Remix, property: KProperty<*>, value: R) {
-        thisRef.valueByQualifiedName[qualifiedName] = value
     }
 }
 
@@ -220,9 +202,11 @@ abstract class Named {
 abstract class Role<V> : Named() {
     operator fun provideDelegate(thisRef: Mix, prop: KProperty<*>): RoleMixDelegate<V> {
         val anyValue = thisRef.valueByQualifiedName[qualifiedName]
-            ?: throw IllegalArgumentException("missing key $qualifiedName")
+        if (anyValue == null && !thisRef.constructedForReflection) {
+            throw IllegalArgumentException("missing key $qualifiedName")
+        }
         @Suppress("UNCHECKED_CAST")
-        return RoleMixDelegate(anyValue as V)
+        return RoleMixDelegate(this, anyValue as V?)
     }
 }
 
@@ -279,7 +263,6 @@ data class RolePath<V : Any> internal constructor(
         return segmentsToString(segments)
     }
 
-
     companion object {
         fun <M : MixParts, V : Any> make(mixPath: RolePath<M>, role: Role<V>): RolePath<V> =
             RolePath(mixPath.segments + AtRole(role))
@@ -310,10 +293,10 @@ private fun segmentsToString(segments: List<RolePathSegment>): String {
 
 fun <V : Any> Role<V>.toPath(): RolePath<V> = RolePath(this)
 
-inline operator fun <reified L : Any, R: Any> Role<L>.plus(other: RolePath<R>): RolePath<R> =
+inline operator fun <reified L : Any, R : Any> Role<L>.plus(other: RolePath<R>): RolePath<R> =
     toPath().internalConcat(L::class, other)
 
-inline operator fun <reified L: Any, R: Any> RolePath<L>.plus(other: RolePath<R>): RolePath<R> =
+inline operator fun <reified L : Any, R : Any> RolePath<L>.plus(other: RolePath<R>): RolePath<R> =
     this.internalConcat(L::class, other)
 
 @Suppress("UNCHECKED_CAST")
@@ -428,15 +411,12 @@ operator fun <V : Any> Role<List<V>>.get(index: Int): RolePath<V> =
 operator fun <V : Any> RolePath<List<V>>.get(index: Int): RolePath<V> =
     RolePath(this, index)
 
-class RoleMixDelegate<V>(private val value: V) : ReadOnlyProperty<Mix, V> {
-    override operator fun getValue(thisRef: Mix, property: KProperty<*>): V = value
-}
-
 data class Part constructor(val keyName: String, val value: Any)
 
 @Deprecated(
     "Instead use `ThisRole of value` to be explicitly different from Kotlin's standard `to`.",
-    ReplaceWith("of"))
+    ReplaceWith("of")
+)
 infix fun <V : Any> Role<V>.to(value: V): Part = of(value)
 
 /**
@@ -446,4 +426,80 @@ infix fun <V : Any> Role<V>.of(value: V): Part {
     return Part(qualifiedName, value)
 }
 
+/**
+ * Represents a `Role` whose value is a `Mix` subclass `M`, with corresponding `Remix` subclass `R`.
+ */
 abstract class MixRole<M : Any, R : Any> : Role<M>()
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+// Support for delegating properties to Role's.
+
+interface RoleDeclarationProvider {
+    val roleDeclaration: RoleDeclaration
+}
+
+data class RoleDeclaration(val role: Role<*>, val isNullable: Boolean)
+
+class RoleMixDelegate<V>(private val role: Role<V>, private val value: V?) :
+    ReadOnlyProperty<Mix, V>, RoleDeclarationProvider {
+    override val roleDeclaration = RoleDeclaration(role, false)
+    override operator fun getValue(thisRef: Mix, property: KProperty<*>): V =
+        value ?: throw IllegalStateException("missing required value for $role")
+}
+
+class OptionalRoleMixDelegate<V>(role: Role<V>, private val value: V?) :
+    ReadOnlyProperty<Mix, V?>, RoleDeclarationProvider {
+    override val roleDeclaration = RoleDeclaration(role, true)
+    override operator fun getValue(thisRef: Mix, property: KProperty<*>): V? = value
+}
+
+class RoleRemixDelegate<V>(private val role: Role<V>) :
+    ReadWriteProperty<Remix, V?>, RoleDeclarationProvider {
+    override val roleDeclaration = RoleDeclaration(role, true)
+    override operator fun getValue(thisRef: Remix, property: KProperty<*>): V? {
+        @Suppress("UNCHECKED_CAST")
+        return thisRef.valueByQualifiedName[role.qualifiedName] as V?
+    }
+
+    override operator fun setValue(thisRef: Remix, property: KProperty<*>, value: V?) {
+        if (value == null) {
+            thisRef.valueByQualifiedName.remove(role.qualifiedName)
+        } else {
+            thisRef.valueByQualifiedName[role.qualifiedName] = value as Any
+        }
+    }
+}
+
+class MixRoleRemixDelegate<M : Mix, R : Remix>(
+    private val role: Role<M>,
+    private val cons: () -> R
+) : ReadWriteProperty<Remix, R>, RoleDeclarationProvider {
+    override val roleDeclaration = RoleDeclaration(role, true)
+    override operator fun getValue(thisRef: Remix, property: KProperty<*>): R {
+        @Suppress("UNCHECKED_CAST")
+        return thisRef.valueByQualifiedName.computeIfAbsent(role.qualifiedName) { cons() } as R
+    }
+
+    override operator fun setValue(thisRef: Remix, property: KProperty<*>, value: R) {
+        thisRef.valueByQualifiedName[role.qualifiedName] = value
+    }
+}
+
+// TODO: Make this thread-safe.
+val roleDeclarationsCache: MutableMap<KClass<*>, Set<RoleDeclaration>> = mutableMapOf()
+
+fun <T : Mix> roleDeclarations(kclass: KClass<T>): Set<RoleDeclaration> =
+  roleDeclarationsCache.computeIfAbsent(kclass) {
+    val instance = kclass.constructFromParts(listOf(ConstructedForReflection of Unit))
+    fun maybeRoleDecl(prop: KProperty1<T, *>): RoleDeclaration? {
+        prop.isAccessible = true
+        val delegate = prop.getDelegate(instance)
+        return if (delegate is RoleDeclarationProvider) {
+            delegate.roleDeclaration
+        } else {
+            null
+        }
+    }
+    kclass.declaredMemberProperties.mapNotNull(::maybeRoleDecl).toSet()
+}
+
