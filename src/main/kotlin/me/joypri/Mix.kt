@@ -1,5 +1,6 @@
 package me.joypri
 
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.properties.ReadOnlyProperty
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KClass
@@ -485,8 +486,7 @@ class MixRoleRemixDelegate<M : Mix, R : Remix>(
     }
 }
 
-// TODO: Make this thread-safe.
-val roleDeclarationsCache: MutableMap<KClass<*>, Set<RoleDeclaration>> = mutableMapOf()
+val roleDeclarationsCache = ConcurrentHashMap<KClass<*>, Set<RoleDeclaration>>()
 
 fun <T : Mix> roleDeclarations(kclass: KClass<T>): Set<RoleDeclaration> =
   roleDeclarationsCache.computeIfAbsent(kclass) {
