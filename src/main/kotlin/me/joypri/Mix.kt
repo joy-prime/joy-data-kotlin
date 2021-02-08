@@ -55,7 +55,17 @@ abstract class Role<V : Any> : Named() {
         }
     }
 
-    open fun asValue(value: Any?): V {
+    open fun asNullableValue(value: Any?): V? {
+        if (value == null) {
+            return null
+        } else {
+            requireCanHold(value)
+            @Suppress("UNCHECKED_CAST")
+            return value as V
+        }
+    }
+
+    open fun asValue(value: Any): V {
         requireCanHold(value)
         @Suppress("UNCHECKED_CAST")
         return value as V
@@ -63,10 +73,15 @@ abstract class Role<V : Any> : Named() {
 
     operator fun provideDelegate(thisRef: Mix, prop: KProperty<*>): RoleMixDelegate<V> {
         val value = thisRef.valueByQualifiedName[qualifiedName]
-        if (value == null && !thisRef.constructedForReflection) {
-            throw IllegalArgumentException("missing key $qualifiedName")
+        return if (value == null) {
+            if (thisRef.constructedForReflection) {
+                RoleMixDelegate(this, null)
+            } else {
+                throw IllegalArgumentException("missing value for role $qualifiedName")
+            }
+        } else {
+            RoleMixDelegate(this, asValue(value))
         }
-        return RoleMixDelegate(this, asValue(value))
     }
 }
 
@@ -134,7 +149,7 @@ interface MixParts {
 
     operator fun <V : Any> get(role: Role<V>): V? {
         val value = this.valueByQualifiedName[role.qualifiedName]
-        return if (value == null) null else role.asValue(value)
+        return role.asNullableValue(value)
     }
 }
 
@@ -221,7 +236,7 @@ open class Mix(vararg parts: Part) : MixParts {
 class OptionalRoleMixDelegateProvider<V : Any>(private val role: Role<V>) {
     operator fun provideDelegate(thisRef: Mix, prop: KProperty<*>): OptionalRoleMixDelegate<V> {
         val value = thisRef.valueByQualifiedName[role.qualifiedName]
-        return OptionalRoleMixDelegate(role, role.asValue(value))
+        return OptionalRoleMixDelegate(role, role.asNullableValue(value))
     }
 }
 
