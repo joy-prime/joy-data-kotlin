@@ -15,9 +15,9 @@ enum class Job {
     MANAGER,
 }
 
-object FirstName : Role<String>()
-object MiddleName : Role<String>()
-object Age : Role<Int>()
+object FirstName : StringRole()
+object MiddleName : StringRole()
+object Age : IntRole()
 
 open class Person(vararg parts: Part) : Mix(*parts) {
     val firstName by FirstName
@@ -32,10 +32,10 @@ open class PersonR(vararg parts: Part) : Remix(*parts) {
     override fun toMix() = Person(*mixParts())
 }
 
-object TheirJob : Role<Job>()
+object TheirJob : ClassRole<Job>(Job::class)
 
-object EmployeeNumber : Role<Int>()
-object HireDate : Role<LocalDate>()
+object EmployeeNumber : IntRole()
+object HireDate : ClassRole<LocalDate>(LocalDate::class)
 
 open class HrInfo(vararg parts: Part) : Mix(*parts) {
     val employeeNumber by EmployeeNumber
@@ -49,9 +49,7 @@ open class HrInfoR(vararg parts: Part) : Remix(*parts) {
     override fun toMix() = HrInfo(*mixParts())
 }
 
-typealias HrInfoRole = MixRole<HrInfo, HrInfoR>
-
-object TheirHrInfo : HrInfoRole()
+object TheirHrInfo : MixRole<HrInfo, HrInfoR>(HrInfo::class, HrInfoR::class)
 
 open class Employee(vararg parts: Part) : Person(*parts) {
     val job by TheirJob
@@ -65,7 +63,7 @@ open class EmployeeR(vararg parts: Part) : PersonR(*parts) {
     override fun toMix() = Employee(*mixParts())
 }
 
-object Reports : Role<List<Employee>>()
+object Reports : ListRole<Employee>(Employee::class)
 
 open class Manager(vararg parts: Part) : Employee(*parts) {
     val reports by Reports

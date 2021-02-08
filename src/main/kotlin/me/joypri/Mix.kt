@@ -11,18 +11,130 @@ import kotlin.reflect.full.isSubclassOf
 import kotlin.reflect.full.primaryConstructor
 import kotlin.reflect.jvm.isAccessible
 
+//////////////////////////////////////////////////////////////////////////////
+// Role
+
+/**
+ * Subordinate imp (underlying data or behavior) of a [Mix] or [Remix].
+ * Specific roles are declared as `object` subclasses of `Role`.
+ * For example:
+ * ~~~
+ * object FirstName : StringRole()
+ * ~~~
+ *
+ * Role are used when declaring `Mix` subtypes:
+ * ~~~
+ * open class Person(vararg parts: Part) : Mix(*parts) {
+ *   val firstName by FirstName
+ *   val middleName by +MiddleName
+ *   val age by Age
+ * }
+ * ~~~
+ * They are also used to provide and access data in `Mix` hierarchies:
+ * ~~~
+ * val fred = Mix(FirstName of "Fred", Age of 12)
+ * assertEquals("Fred", fred[FirstName])
+ * ~~~
+ * `Role` values are never nullable, but in some cases a `Mix` or `Remix` may
+ * optionally have a role.
+ */
+abstract class Role<V : Any> : Named() {
+    /**
+     * Indicates whether [value] is valid for this role. `null` is never a valid value;
+     * roles can have an optional association with their parent class, but their values
+     * cannot be `null`.
+     */
+    abstract fun canHold(value: Any?): Boolean
+
+    /**
+     * Throws [IllegalStateException] if [value] is not valid for this role.
+     */
+    open fun requireCanHold(value: Any?) {
+        if (!canHold(value)) {
+            throw IllegalStateException("$this can't hold $value")
+        }
+    }
+
+    open fun asValue(value: Any?): V {
+        requireCanHold(value)
+        @Suppress("UNCHECKED_CAST")
+        return value as V
+    }
+
+    operator fun provideDelegate(thisRef: Mix, prop: KProperty<*>): RoleMixDelegate<V> {
+        val value = thisRef.valueByQualifiedName[qualifiedName]
+        if (value == null && !thisRef.constructedForReflection) {
+            throw IllegalArgumentException("missing key $qualifiedName")
+        }
+        return RoleMixDelegate(this, asValue(value))
+    }
+}
+
+/**
+ *  [Role] whose value is not a [Mix].
+ */
+abstract class LeafRole<V : Any> : Role<V>() {
+    operator fun provideDelegate(thisRef: Remix, prop: KProperty<*>): RoleRemixDelegate<V> {
+        return RoleRemixDelegate(this)
+    }
+}
+
+/**
+ * A [LeafRole] whose value type [V] is represented by `KClass<V>`.
+ * Specific roles are declared as `object` subclasses.
+ * For example:
+ * ~~~
+ * object FirstName : ClassRole<String>(String::class)
+ * ~~~
+ * The above syntax is undeniably awkward. The runtime type, `String::class`, is
+ * needed for flexible reflection. Perhaps Kotlin will eventually make this easier,
+ * as is suggested in [KT-13127](https://youtrack.jetbrains.com/issue/KT-13127).
+ * As a work-around, we define convenience subclasses that are preferred for
+ * routine use:
+ * ~~~
+ * object FirstName : StringRole
+ * ~~~
+ */
+@Suppress("MemberVisibilityCanBePrivate")
+abstract class ClassRole<V : Any>(val valueClass: KClass<V>) : LeafRole<V>() {
+    override fun canHold(value: Any?): Boolean = valueClass.isInstance(value)
+}
+
+open class BooleanRole : ClassRole<Boolean>(Boolean::class)
+
+open class ByteRole : ClassRole<Byte>(Byte::class)
+open class CharRole : ClassRole<Char>(Char::class)
+open class IntRole : ClassRole<Int>(Int::class)
+open class LongRole : ClassRole<Long>(Long::class)
+open class FloatRole : ClassRole<Float>(Float::class)
+open class DoubleRole : ClassRole<Double>(Double::class)
+
+open class StringRole : ClassRole<String>(String::class)
+
+
+/**
+ * Represents a role whose value is a [List] of [E].
+ */
+abstract class ListRole<E : Any>(
+    val elementClass: KClass<E>,
+    val ballparkSize: Int = 10,
+    val maxSize: Int? = null
+) : LeafRole<List<E>>() {
+    override fun canHold(value: Any?) =
+        value is List<*> &&
+                value.all { elementClass.isInstance(it) }
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Mix abstractions
+
 interface MixParts {
     val valueByQualifiedName: Map<String, Any>
     val parts: List<Part> get() = valueByQualifiedName.map { Part(it.key, it.value) }
-}
 
-inline operator fun <M : MixParts, reified V> M.get(role: Role<V>): V? {
-    return when (val value = this.valueByQualifiedName[role.qualifiedName]) {
-        null -> null
-        is V -> value
-        else -> throw IllegalStateException(
-            "Expected data[${role.qualifiedName}] to have a ${V::class}, but there's a ${value::class}"
-        )
+    operator fun <V : Any> get(role: Role<V>): V? {
+        val value = this.valueByQualifiedName[role.qualifiedName]
+        return if (value == null) null else role.asValue(value)
     }
 }
 
@@ -34,7 +146,7 @@ inline operator fun <M : MixParts, reified V> M.get(role: Role<V>): V? {
 fun <M : MixParts> M.with(vararg overrides: Part): M =
     this::class.constructFromParts(parts + overrides)
 
-inline fun <M : MixParts, reified V : Any> M.mapAt(role: Role<V>, f: (V) -> V): M {
+fun <M : MixParts, V : Any> M.mapAt(role: LeafRole<V>, f: (V) -> V): M {
     val oldValue = get(role)
     require(oldValue != null) {
         "We only support mapping an existing role value, but $this[$role] is null."
@@ -68,51 +180,60 @@ fun <T : Any> KClass<T>.constructFromParts(parts: List<Part>): T {
     return ctor.call(parts.toTypedArray())
 }
 
+//////////////////////////////////////////////////////////////////////////////
+// Mix
+
 /**
  * If present in a `Mix`, flags it as having been constructed just for reflection.
  * This disables error-checking for missing `Role`s.
  */
-object ConstructedForReflection : Role<Unit>()
+object ConstructedForReflection : ClassRole<Unit>(Unit::class)
 
 /**
- * An immutable heterogeneous map from `Role<V>` to `V`. If any of the provided `parts` have the same
+ * An immutable heterogeneous map from `Role<V>` to `V`. If any of the provided [parts] have the same
  * keys, the last occurrence of a key is the one that is used.
  *
  * Subclasses can have `val` properties that are delegated to `Role<V>`, in which case those properties
- * will take on the values of the corresponding roles.
+ * will take on the values associated with the corresponding roles in [parts].
  */
 open class Mix(vararg parts: Part) : MixParts {
 
     final override val valueByQualifiedName: Map<String, Any> =
         parts.associate { it.keyName to it.value }
 
+    // Pre-compute `parts` now.
+    final override val parts = super.parts
+
     val constructedForReflection =
         valueByQualifiedName.containsKey(ConstructedForReflection.qualifiedName)
 
-    operator fun <V> Role<V>.unaryPlus(): OptionalRoleMixDelegateProvider<V> =
-        OptionalRoleMixDelegateProvider(this)
+    operator fun <V : Any> Role<V>.unaryPlus() = OptionalRoleMixDelegateProvider(this)
 
     override fun equals(other: Any?): Boolean =
-        other is Mix && other.javaClass == javaClass
+        other is Mix
+                && other.javaClass == javaClass
                 && other.valueByQualifiedName == valueByQualifiedName
 
     override fun hashCode(): Int =
         31 * valueByQualifiedName.hashCode() + javaClass.hashCode()
 }
 
-class OptionalRoleMixDelegateProvider<V>(private val role: Role<V>) {
+class OptionalRoleMixDelegateProvider<V : Any>(private val role: Role<V>) {
     operator fun provideDelegate(thisRef: Mix, prop: KProperty<*>): OptionalRoleMixDelegate<V> {
-        val anyValue = thisRef.valueByQualifiedName[role.qualifiedName]
-        @Suppress("UNCHECKED_CAST")
-        return OptionalRoleMixDelegate(role, anyValue as V?)
+        val value = thisRef.valueByQualifiedName[role.qualifiedName]
+        return OptionalRoleMixDelegate(role, role.asValue(value))
     }
 }
+
+//////////////////////////////////////////////////////////////////////////////
+// Remix
 
 @DslMarker
 annotation class RemixMarker
 
 /**
- * A mutable heterogeneous map from `Role<V>` to `V`, designed as a builder for a `Mix`, and with DSL support.
+ * A mutable heterogeneous map from `Role<V>` to `V`, except that `MixRole<M, R>` is mapped to `R`.
+ * This is designed as a builder for a `Mix` with optional DSL support. Not thread-safe.
  *
  * A `var` property in a subclass of `Remix` can be delegated to `Role<V>`, providing read-write access
  * to the value associated with that `Role`. Such a property has type `V?`, since the value may or may not
@@ -129,7 +250,7 @@ open class Remix(vararg parts: Part) : MixParts {
     override val valueByQualifiedName: MutableMap<String, Any> =
         parts.associateTo(mutableMapOf()) { it.keyName to it.value }
 
-    operator fun <V> set(role: Role<V>, value: V) {
+    operator fun <V : Any> set(role: LeafRole<V>, value: V?) {
         if (value == null) {
             valueByQualifiedName.remove(role.qualifiedName)
         } else {
@@ -137,11 +258,19 @@ open class Remix(vararg parts: Part) : MixParts {
         }
     }
 
+    operator fun <M : Mix, R : Remix> set(role: MixRole<M, R>, value: R?) {
+        if (value == null) {
+            valueByQualifiedName.remove(role.qualifiedName)
+        } else {
+            valueByQualifiedName[role.qualifiedName] = value
+        }
+    }
+
+    // TODO: implement set(MixRole, Mix), which should convert the Mix to a Remix.
+
     /**
-     * Returns this `Remix`'s `Part`s but with top-level `Remix` `Part`s converted
+     * Returns this `Remix`'s `Part`s with all subordinate `Remix`s converted
      * via `Remix.toMix()`.
-     *
-     * FIXME: We should convert `Remix` to `Mix` throughout the tree!
      */
     protected fun mixParts(): Array<Part> {
         return parts.map { part ->
@@ -158,35 +287,32 @@ open class Remix(vararg parts: Part) : MixParts {
      */
     open fun toMix(): Mix = Mix(*mixParts())
 
-    operator fun <V> Role<V>.unaryPlus(): RoleRemixDelegateProvider<V> =
+    operator fun <V : Any> LeafRole<V>.unaryPlus(): RoleRemixDelegateProvider<V> =
         RoleRemixDelegateProvider(this)
 
-    operator fun <M : Any, R : Any> MixRole<M, R>.not(): MixRoleRemixDelegateProvider<M, R> =
+    operator fun <M : Mix, R : Remix> MixRole<M, R>.not(): MixRoleRemixDelegateProvider<M, R> =
         MixRoleRemixDelegateProvider(this)
 
     override fun equals(other: Any?): Boolean =
-        other is Remix && other.javaClass == javaClass
+        other is Remix
+                && other.javaClass == javaClass
                 && other.valueByQualifiedName == valueByQualifiedName
 
     override fun hashCode(): Int =
         31 * valueByQualifiedName.hashCode() + javaClass.hashCode()
 }
 
-class RoleRemixDelegateProvider<V>(private val role: Role<V>) {
+class RoleRemixDelegateProvider<V : Any>(private val role: LeafRole<V>) {
     operator fun provideDelegate(thisRef: Remix, prop: KProperty<*>): RoleRemixDelegate<V> =
         RoleRemixDelegate(role)
 }
 
-@Suppress("unused") // The unused warning for R is a lie; R is used in the upcoming extension function.
-class MixRoleRemixDelegateProvider<M, R>(val role: Role<M>)
-
-inline operator fun <M : Mix, reified R : Remix>
-        MixRoleRemixDelegateProvider<M, R>.provideDelegate(
-    thisRef: Remix,
-    prop: KProperty<*>
-): MixRoleRemixDelegate<M, R> {
-    return MixRoleRemixDelegate(role) {
-        R::class.constructFromParts(listOf())
+class MixRoleRemixDelegateProvider<M : Mix, R : Remix>(val role: MixRole<M, R>) {
+    operator fun provideDelegate(
+        thisRef: Remix,
+        prop: KProperty<*>
+    ): MixRoleRemixDelegate<M, R> {
+        return MixRoleRemixDelegate(role)
     }
 }
 
@@ -200,20 +326,9 @@ abstract class Named {
     }
 }
 
-abstract class Role<V> : Named() {
-    operator fun provideDelegate(thisRef: Mix, prop: KProperty<*>): RoleMixDelegate<V> {
-        val anyValue = thisRef.valueByQualifiedName[qualifiedName]
-        if (anyValue == null && !thisRef.constructedForReflection) {
-            throw IllegalArgumentException("missing key $qualifiedName")
-        }
-        @Suppress("UNCHECKED_CAST")
-        return RoleMixDelegate(this, anyValue as V?)
-    }
-}
-
 sealed class RolePathSegment
 
-data class AtRole(val role: Role<*>) : RolePathSegment() {
+data class AtRole(val role: LeafRole<*>) : RolePathSegment() {
     override fun toString(): String = role.toString()
 }
 
@@ -224,7 +339,7 @@ data class AtIndex(val index: Int) : RolePathSegment() {
 data class RolePath<V : Any> internal constructor(
     val segments: List<RolePathSegment>
 ) {
-    constructor (role: Role<V>) :
+    constructor (role: LeafRole<V>) :
             this(listOf(AtRole(role)))
 
     constructor (other: RolePath<List<V>>, index: Int) :
@@ -265,7 +380,7 @@ data class RolePath<V : Any> internal constructor(
     }
 
     companion object {
-        fun <M : MixParts, V : Any> make(mixPath: RolePath<M>, role: Role<V>): RolePath<V> =
+        fun <M : MixParts, V : Any> make(mixPath: RolePath<M>, role: LeafRole<V>): RolePath<V> =
             RolePath(mixPath.segments + AtRole(role))
 
         fun <V : Any> empty(): RolePath<V> =
@@ -292,9 +407,9 @@ private fun segmentsToString(segments: List<RolePathSegment>): String {
     return builder.toString()
 }
 
-fun <V : Any> Role<V>.toPath(): RolePath<V> = RolePath(this)
+fun <V : Any> LeafRole<V>.toPath(): RolePath<V> = RolePath(this)
 
-inline operator fun <reified L : Any, R : Any> Role<L>.plus(other: RolePath<R>): RolePath<R> =
+inline operator fun <reified L : Any, R : Any> LeafRole<L>.plus(other: RolePath<R>): RolePath<R> =
     toPath().internalConcat(L::class, other)
 
 inline operator fun <reified L : Any, R : Any> RolePath<L>.plus(other: RolePath<R>): RolePath<R> =
@@ -400,13 +515,13 @@ private fun getAt(
     }
 }
 
-operator fun <M : MixParts, V : Any> RolePath<M>.plus(role: Role<V>): RolePath<V> =
+operator fun <M : MixParts, V : Any> RolePath<M>.plus(role: LeafRole<V>): RolePath<V> =
     RolePath.make(this, role)
 
-operator fun <M : MixParts, V : Any> Role<M>.plus(role: Role<V>): RolePath<V> =
+operator fun <M : MixParts, V : Any> LeafRole<M>.plus(role: LeafRole<V>): RolePath<V> =
     this.toPath() + role
 
-operator fun <V : Any> Role<List<V>>.get(index: Int): RolePath<V> =
+operator fun <V : Any> LeafRole<List<V>>.get(index: Int): RolePath<V> =
     RolePath(this.toPath(), index)
 
 operator fun <V : Any> RolePath<List<V>>.get(index: Int): RolePath<V> =
@@ -418,88 +533,103 @@ data class Part constructor(val keyName: String, val value: Any)
     "Instead use `ThisRole of value` to be explicitly different from Kotlin's standard `to`.",
     ReplaceWith("of")
 )
-infix fun <V : Any> Role<V>.to(value: V): Part = of(value)
+infix fun <V : Any> LeafRole<V>.to(value: V): Part = of(value)
 
 /**
  * TODO: Provide a counterpart for `MixRole`.
  */
-infix fun <V : Any> Role<V>.of(value: V): Part {
+infix fun <V : Any> LeafRole<V>.of(value: V): Part {
     return Part(qualifiedName, value)
 }
 
 /**
- * Represents a `Role` whose value is a `Mix` subclass `M`, with corresponding `Remix` subclass `R`.
+ * Represents a [LeafRole] whose value is a [Mix] subclass `M`, with corresponding [Remix] subclass `R`.
  */
-abstract class MixRole<M : Any, R : Any> : Role<M>()
+abstract class MixRole<M : Any, R : Remix>(mClass: KClass<M>, val remixClass: KClass<R>) :
+    ClassRole<M>(mClass)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
-// Support for delegating properties to Role's.
+// Support for delegating properties to `Role`s.
+
+/**
+ * Represents a declared association of a [Role] with a parent [Mix] or [Remix].
+ * This class is intended as a runtime representation, so it is not type-parameterized
+ * and refers to a `Role<*>`.
+ *
+ * @param isOptional indicates that the role has an optional association with its parent.
+ *                   (`Role` values are never nullable.)
+ */
+data class RoleDeclaration(val role: Role<*>, val isOptional: Boolean)
 
 interface RoleDeclarationProvider {
     val roleDeclaration: RoleDeclaration
 }
 
-data class RoleDeclaration(val role: Role<*>, val isNullable: Boolean)
+data class ListRoleDeclaration(val listRole: ListRole<*>, val isNullable: Boolean)
 
-class RoleMixDelegate<V>(private val role: Role<V>, private val value: V?) :
+interface ListRoleDeclarationProvider {
+    val listRoleDeclaration: ListRoleDeclaration
+}
+
+class RoleMixDelegate<V : Any>(private val role: Role<V>, private val value: V?) :
     ReadOnlyProperty<Mix, V>, RoleDeclarationProvider {
     override val roleDeclaration = RoleDeclaration(role, false)
     override operator fun getValue(thisRef: Mix, property: KProperty<*>): V =
         value ?: throw IllegalStateException("missing required value for $role")
 }
 
-class OptionalRoleMixDelegate<V>(role: Role<V>, private val value: V?) :
+class ListRoleMixDelegate<E : Any>(private val role: ListRole<E>, private val value: List<E>) :
+    ReadOnlyProperty<Mix, List<E>>, RoleDeclarationProvider {
+    override val roleDeclaration = RoleDeclaration(role, false)
+    override operator fun getValue(thisRef: Mix, property: KProperty<*>): List<E> = value
+}
+
+class OptionalRoleMixDelegate<V : Any>(role: Role<V>, private val value: V?) :
     ReadOnlyProperty<Mix, V?>, RoleDeclarationProvider {
     override val roleDeclaration = RoleDeclaration(role, true)
     override operator fun getValue(thisRef: Mix, property: KProperty<*>): V? = value
 }
 
-class RoleRemixDelegate<V>(private val role: Role<V>) :
+class RoleRemixDelegate<V : Any>(private val role: LeafRole<V>) :
     ReadWriteProperty<Remix, V?>, RoleDeclarationProvider {
     override val roleDeclaration = RoleDeclaration(role, true)
-    override operator fun getValue(thisRef: Remix, property: KProperty<*>): V? {
-        @Suppress("UNCHECKED_CAST")
-        return thisRef.valueByQualifiedName[role.qualifiedName] as V?
-    }
+    override operator fun getValue(thisRef: Remix, property: KProperty<*>): V? =
+        thisRef[role]
 
     override operator fun setValue(thisRef: Remix, property: KProperty<*>, value: V?) {
-        if (value == null) {
-            thisRef.valueByQualifiedName.remove(role.qualifiedName)
-        } else {
-            thisRef.valueByQualifiedName[role.qualifiedName] = value as Any
-        }
+        thisRef[role] = value
     }
 }
 
-class MixRoleRemixDelegate<M : Mix, R : Remix>(
-    private val role: Role<M>,
-    private val cons: () -> R
-) : ReadWriteProperty<Remix, R>, RoleDeclarationProvider {
+class MixRoleRemixDelegate<M : Mix, R : Remix>(private val role: MixRole<M, R>) :
+    ReadWriteProperty<Remix, R>, RoleDeclarationProvider {
     override val roleDeclaration = RoleDeclaration(role, true)
     override operator fun getValue(thisRef: Remix, property: KProperty<*>): R {
         @Suppress("UNCHECKED_CAST")
-        return thisRef.valueByQualifiedName.computeIfAbsent(role.qualifiedName) { cons() } as R
+        return thisRef.valueByQualifiedName.computeIfAbsent(role.qualifiedName) {
+            role.remixClass.constructFromParts(listOf())
+        } as R
     }
 
     override operator fun setValue(thisRef: Remix, property: KProperty<*>, value: R) {
-        thisRef.valueByQualifiedName[role.qualifiedName] = value
+        thisRef[role] = value
     }
 }
 
 val roleDeclarationsCache = ConcurrentHashMap<KClass<*>, Set<RoleDeclaration>>()
 
 fun <T : Mix> roleDeclarations(kclass: KClass<T>): Set<RoleDeclaration> =
-  roleDeclarationsCache.computeIfAbsent(kclass) {
-    val instance = kclass.constructFromParts(listOf(ConstructedForReflection of Unit))
-    fun maybeRoleDecl(prop: KProperty1<T, *>): RoleDeclaration? {
-        prop.isAccessible = true
-        val delegate = prop.getDelegate(instance)
-        return if (delegate is RoleDeclarationProvider) {
-            delegate.roleDeclaration
-        } else {
-            null
+    roleDeclarationsCache.computeIfAbsent(kclass) {
+        val instance = kclass.constructFromParts(listOf(ConstructedForReflection of Unit))
+        fun maybeRoleDecl(prop: KProperty1<T, *>): RoleDeclaration? {
+            prop.isAccessible = true
+            val delegate = prop.getDelegate(instance)
+            return if (delegate is RoleDeclarationProvider) {
+                delegate.roleDeclaration
+            } else {
+                null
+            }
         }
+        kclass.declaredMemberProperties.mapNotNull(::maybeRoleDecl).toSet()
     }
-    kclass.declaredMemberProperties.mapNotNull(::maybeRoleDecl).toSet()
-}
 
