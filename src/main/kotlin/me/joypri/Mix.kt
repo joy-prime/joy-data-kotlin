@@ -8,6 +8,7 @@ import kotlin.reflect.KProperty
 import kotlin.reflect.KProperty1
 import kotlin.reflect.full.declaredMemberProperties
 import kotlin.reflect.full.isSubclassOf
+import kotlin.reflect.full.memberProperties
 import kotlin.reflect.full.primaryConstructor
 import kotlin.reflect.jvm.isAccessible
 
@@ -580,23 +581,11 @@ interface RoleDeclarationProvider {
     val roleDeclaration: RoleDeclaration
 }
 
-data class ListRoleDeclaration(val listRole: ListRole<*>, val isNullable: Boolean)
-
-interface ListRoleDeclarationProvider {
-    val listRoleDeclaration: ListRoleDeclaration
-}
-
 class RoleMixDelegate<V : Any>(private val role: Role<V>, private val value: V?) :
     ReadOnlyProperty<Mix, V>, RoleDeclarationProvider {
     override val roleDeclaration = RoleDeclaration(role, false)
     override operator fun getValue(thisRef: Mix, property: KProperty<*>): V =
         value ?: throw IllegalStateException("missing required value for $role")
-}
-
-class ListRoleMixDelegate<E : Any>(private val role: ListRole<E>, private val value: List<E>) :
-    ReadOnlyProperty<Mix, List<E>>, RoleDeclarationProvider {
-    override val roleDeclaration = RoleDeclaration(role, false)
-    override operator fun getValue(thisRef: Mix, property: KProperty<*>): List<E> = value
 }
 
 class OptionalRoleMixDelegate<V : Any>(role: Role<V>, private val value: V?) :
@@ -645,6 +634,6 @@ fun <T : Mix> roleDeclarations(kclass: KClass<T>): Set<RoleDeclaration> =
                 null
             }
         }
-        kclass.declaredMemberProperties.mapNotNull(::maybeRoleDecl).toSet()
+        kclass.memberProperties.mapNotNull(::maybeRoleDecl).toSet()
     }
 

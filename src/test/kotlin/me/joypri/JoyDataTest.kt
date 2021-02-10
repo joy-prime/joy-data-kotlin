@@ -71,6 +71,33 @@ open class Manager(vararg parts: Part) : Employee(*parts) {
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class JoyDataTest {
+    private val fredHireDate: LocalDate = LocalDate.of(1990, 1, 25)
+    private val fredEmployeeNumber = 10000
+    private val fredAge = 35
+    private val fred = Employee(
+        FirstName of "Fred",
+        Age of fredAge,
+        TheirJob of Job.IC,
+        TheirHrInfo of HrInfo(
+            EmployeeNumber of fredEmployeeNumber,
+            HireDate of fredHireDate
+        )
+    )
+
+    private val sallyEmployeeNumber = 20000
+    private val sallyHireDate: LocalDate = LocalDate.of(1995, 2, 20)
+    private val sallyAge = 37
+    private val sally = Manager(
+        FirstName of "Sally",
+        Age of sallyAge,
+        TheirJob of Job.MANAGER,
+        TheirHrInfo of HrInfo(
+            EmployeeNumber of sallyEmployeeNumber,
+            HireDate of sallyHireDate
+        ),
+        Reports of listOf(fred)
+    )
+
     @Nested
     inner class RoleTest {
         @Test
@@ -204,19 +231,6 @@ class JoyDataTest {
 
         @Test
         fun `Mix _mapAt _with _get RolePath`() {
-            // TODO: It's time to create some fixtures and make these tests into nice specs.
-            val fredHireDate = LocalDate.of(1990, 1, 25)
-            val fredEmployeeNumber = 10000
-            val fredAge = 35
-            val fred = Employee(
-                FirstName of "Fred",
-                Age of fredAge,
-                TheirJob of Job.IC,
-                TheirHrInfo of HrInfo(
-                    EmployeeNumber of fredEmployeeNumber,
-                    HireDate of fredHireDate
-                )
-            )
             assertEquals(fred as Employee?, fred[RolePath.empty()])
             assertEquals(fredAge, fred[Age.toPath()])
             assertEquals(fredEmployeeNumber, fred[TheirHrInfo + EmployeeNumber])
@@ -240,23 +254,10 @@ class JoyDataTest {
             assertNull(john.middleName)
             assertEquals(fredHireDate, john.hrInfo.hireDate)
 
-            val sallyEmployeeNumber = 20000
-            val sallyHireDate = LocalDate.of(1995, 2, 20)
-            val sallyAge = 37
-            val sally = Manager(
-                FirstName of "Sally",
-                Age of sallyAge,
-                TheirJob of Job.MANAGER,
-                TheirHrInfo of HrInfo(
-                    EmployeeNumber of sallyEmployeeNumber,
-                    HireDate of sallyHireDate
-                ),
-                Reports of listOf(fred, john)
-            )
-            val sallyWithFred2 = sally.mapAt(Reports[0]) { fred2 }
-            assertEquals(fred2, sallyWithFred2.reports[0])
+            val sallyWithFred2AndJohn = sally.mapAt(Reports) { listOf(fred2, john) }
+            assertEquals(fred2, sallyWithFred2AndJohn.reports[0])
 
-            val sallyLater = sallyWithFred2.mapAt(Reports[1] + Age) { it + 1 }
+            val sallyLater = sallyWithFred2AndJohn.mapAt(Reports[1] + Age) { it + 1 }
             assertEquals(fred2, sallyLater.reports[0])
             assertEquals("John", sallyLater.reports[1].firstName)
             assertEquals(johnAge + 1, sallyLater.reports[1].age)
@@ -276,10 +277,10 @@ class JoyDataTest {
             }
 
             assertFailsWith(IllegalArgumentException::class) {
-                sally[Reports[2] + Age]
+                sally[Reports[1] + Age]
             }
             assertFailsWith(IllegalArgumentException::class) {
-                sally.mapAt(Reports[2] + Age) { it + 1 }
+                sally.mapAt(Reports[1] + Age) { it + 1 }
             }
         }
         @Test
@@ -294,7 +295,15 @@ class JoyDataTest {
 
         @Test
         fun `Mix_roleDeclarations include superclass`() {
-
+            val expectedManagerRoles = setOf(
+                RoleDeclaration(FirstName, false),
+                RoleDeclaration(MiddleName, true),
+                RoleDeclaration(Age, false),
+                RoleDeclaration(TheirJob, false),
+                RoleDeclaration(TheirHrInfo, false),
+                RoleDeclaration(Reports, false)
+            )
+            assertEquals(expectedManagerRoles, roleDeclarations(Manager::class))
         }
     }
 
