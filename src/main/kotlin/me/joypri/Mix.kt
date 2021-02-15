@@ -249,16 +249,11 @@ annotation class RemixMarker
 
 /**
  * A mutable heterogeneous map from `Role<V>` to `V`, except that `MixRole<M, R>` is mapped to `R`.
- * This is designed as a builder for a `Mix` with optional DSL support. Not thread-safe.
+ * This is designed as a builder for a `Mix` with DSL support. Not thread-safe.
  *
  * A `var` property in a subclass of `Remix` can be delegated to `Role<V>`, providing read-write access
  * to the value associated with that `Role`. Such a property has type `V?`, since the value may or may not
  * be present.
- *
- * Alternatively, a `val` property in a subclass of `Remix` can be delegated to `dsl(Role<V>)`, in which
- * case the property is declared as a DSL-suitable function. The property's type is then `(V.() -> ()) -> Unit`.
- * The property's value is a function that constructs a `V` and provides it as the receiver of
- * the property's function argument.
  */
 @RemixMarker
 open class Remix(vararg parts: Part) : MixParts {
