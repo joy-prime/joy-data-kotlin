@@ -1,13 +1,15 @@
 @file:Suppress("PublicApiImplicitType")
 
-package me.joypri
+package me.joypri.test
 
+import me.joypri.*
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import java.time.LocalDate
+import kotlin.reflect.full.createType
 import kotlin.test.*
 
 enum class Job {
@@ -15,14 +17,20 @@ enum class Job {
     MANAGER,
 }
 
+interface Captioned {
+    val caption: String
+}
+
 object FirstName : StringRole()
 object MiddleName : StringRole()
 object Age : IntRole()
 
-open class Person(vararg parts: Part) : Mix(*parts) {
+open class Person(vararg parts: Part) : Mix(*parts), Captioned {
     val firstName by FirstName
     val middleName by +MiddleName
     val age by Age
+    override val caption: String
+        get() = "$firstName (age $age)"
 }
 
 open class PersonR(vararg parts: Part) : Remix(*parts) {
@@ -37,9 +45,11 @@ object TheirJob : ClassRole<Job>(Job::class)
 object EmployeeNumber : IntRole()
 object HireDate : ClassRole<LocalDate>(LocalDate::class)
 
-open class HrInfo(vararg parts: Part) : Mix(*parts) {
+open class HrInfo(vararg parts: Part) : Mix(*parts), Captioned {
     val employeeNumber by EmployeeNumber
     val hireDate by HireDate
+    override val caption: String
+        get() = "employee $employeeNumber"
 }
 
 open class HrInfoR(vararg parts: Part) : Remix(*parts) {
@@ -54,6 +64,9 @@ object TheirHrInfo : MixRole<HrInfo, HrInfoR>(HrInfo::class, HrInfoR::class)
 open class Employee(vararg parts: Part) : Person(*parts) {
     val job by TheirJob
     val hrInfo by TheirHrInfo
+
+    override val caption: String
+        get() = "$firstName (${hrInfo.caption})"
 }
 
 open class EmployeeR(vararg parts: Part) : PersonR(*parts) {
@@ -102,7 +115,7 @@ class JoyDataTest {
     inner class RoleTest {
         @Test
         fun `has the right fully qualified name`() {
-            assertEquals("me.joypri.FirstName", FirstName.qualifiedName)
+            assertEquals("me.joypri.test.FirstName", FirstName.qualifiedName)
         }
     }
 
@@ -304,6 +317,17 @@ class JoyDataTest {
                 RoleDeclaration(TheirJob, false)
             )
             assertEquals(expectedManagerRoles, roleDeclarations(Manager::class))
+        }
+
+        @Test
+        fun `fun mixImps`() {
+            val expectedClasses = listOf(
+                Employee::class,
+                HrInfo::class,
+                Manager::class,
+                Person::class,
+            )
+            assertEquals(expectedClasses, mixImps(Captioned::class.createType()))
         }
     }
 

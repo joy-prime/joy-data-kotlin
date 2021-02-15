@@ -1,15 +1,15 @@
 package me.joypri
 
+import org.reflections.Reflections
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.properties.ReadOnlyProperty
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KClass
 import kotlin.reflect.KProperty
 import kotlin.reflect.KProperty1
-import kotlin.reflect.full.declaredMemberProperties
-import kotlin.reflect.full.isSubclassOf
-import kotlin.reflect.full.memberProperties
-import kotlin.reflect.full.primaryConstructor
+import kotlin.reflect.KType
+import kotlin.reflect.full.*
 import kotlin.reflect.jvm.isAccessible
 
 //////////////////////////////////////////////////////////////////////////////
@@ -615,6 +615,14 @@ class MixRoleRemixDelegate<M : Mix, R : Remix>(private val role: MixRole<M, R>) 
     }
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////
+// Reflection
+
+/**
+ * Service Provider Interface used as a marker that a class's package provides parts.
+ */
+interface PartsProvider
+
 val roleDeclarationsCache = ConcurrentHashMap<KClass<*>, List<RoleDeclaration>>()
 
 fun <T : Mix> roleDeclarations(kclass: KClass<T>): List<RoleDeclaration> =
@@ -632,4 +640,21 @@ fun <T : Mix> roleDeclarations(kclass: KClass<T>): List<RoleDeclaration> =
         kclass.memberProperties.mapNotNull(::maybeRoleDecl).toList()
             .sortedBy { it.role.qualifiedName }
     }
+
+val mixImpsForFace: Map<KType, List<KClass<*>>> =
+    mutableMapOf<KType, MutableList<KClass<*>>>().also { m ->
+        for (service in ServiceLoader.load(PartsProvider::class.java)) {
+            val packageName = service.javaClass.packageName
+            val reflections = Reflections(packageName)
+            reflections.getSubTypesOf(Mix::class.java).flatMap { mixClass ->
+                val mixKClass = mixClass.kotlin
+                mixKClass.allSupertypes.map { face ->
+                    m.getOrPut(face, { mutableListOf() }).add(mixKClass)
+                }
+            }
+        }
+        m.forEach { (_, imps) -> imps.sortBy { it.qualifiedName } }
+    }
+
+fun mixImps(face: KType): List<KClass<*>> = mixImpsForFace[face] ?: listOf()
 

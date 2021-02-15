@@ -11,10 +11,12 @@ repositories {
 
 dependencies {
     implementation(kotlin("reflect"))
+    implementation(kotlin("script-runtime"))
+    implementation("org.reflections:reflections:0.9.12")
+
     testImplementation(kotlin("test"))
     testImplementation(kotlin("test-junit"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.6.2")
-    implementation(kotlin("script-runtime"))
 }
 
 tasks.test {
