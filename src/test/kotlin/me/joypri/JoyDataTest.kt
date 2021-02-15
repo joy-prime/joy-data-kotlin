@@ -285,23 +285,23 @@ class JoyDataTest {
         }
         @Test
         fun `Mix_roleDeclarations on this class`() {
-            val expectedPersonRoles = setOf(
+            val expectedPersonRoles = listOf(
+                RoleDeclaration(Age, false),
                 RoleDeclaration(FirstName, false),
                 RoleDeclaration(MiddleName, true),
-                RoleDeclaration(Age, false),
             )
             assertEquals(expectedPersonRoles, roleDeclarations(Person::class))
         }
 
         @Test
         fun `Mix_roleDeclarations include superclass`() {
-            val expectedManagerRoles = setOf(
+            val expectedManagerRoles = listOf(
+                RoleDeclaration(Age, false),
                 RoleDeclaration(FirstName, false),
                 RoleDeclaration(MiddleName, true),
-                RoleDeclaration(Age, false),
-                RoleDeclaration(TheirJob, false),
+                RoleDeclaration(Reports, false),
                 RoleDeclaration(TheirHrInfo, false),
-                RoleDeclaration(Reports, false)
+                RoleDeclaration(TheirJob, false)
             )
             assertEquals(expectedManagerRoles, roleDeclarations(Manager::class))
         }

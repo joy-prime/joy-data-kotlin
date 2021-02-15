@@ -620,9 +620,9 @@ class MixRoleRemixDelegate<M : Mix, R : Remix>(private val role: MixRole<M, R>) 
     }
 }
 
-val roleDeclarationsCache = ConcurrentHashMap<KClass<*>, Set<RoleDeclaration>>()
+val roleDeclarationsCache = ConcurrentHashMap<KClass<*>, List<RoleDeclaration>>()
 
-fun <T : Mix> roleDeclarations(kclass: KClass<T>): Set<RoleDeclaration> =
+fun <T : Mix> roleDeclarations(kclass: KClass<T>): List<RoleDeclaration> =
     roleDeclarationsCache.computeIfAbsent(kclass) {
         val instance = kclass.constructFromParts(listOf(ConstructedForReflection of Unit))
         fun maybeRoleDecl(prop: KProperty1<T, *>): RoleDeclaration? {
@@ -634,6 +634,7 @@ fun <T : Mix> roleDeclarations(kclass: KClass<T>): Set<RoleDeclaration> =
                 null
             }
         }
-        kclass.memberProperties.mapNotNull(::maybeRoleDecl).toSet()
+        kclass.memberProperties.mapNotNull(::maybeRoleDecl).toList()
+            .sortedBy { it.role.qualifiedName }
     }
 
