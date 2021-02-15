@@ -377,6 +377,7 @@ class JoyDataTest {
                 firstName = "Fred"
                 age = 12
                 hrInfo.run {
+                    // firstName = "forbidden by DSL rules" // should not compile
                     employeeNumber = 789
                     hireDate = fredHireDate
                 }
