@@ -641,7 +641,7 @@ fun <T : Mix> roleDeclarations(kclass: KClass<T>): List<RoleDeclaration> =
             .sortedBy { it.role.qualifiedName }
     }
 
-val mixImpsForFace: Map<KType, List<KClass<*>>> =
+private val mixImpsForFace: Map<KType, List<KClass<*>>> =
     mutableMapOf<KType, MutableList<KClass<*>>>().also { m ->
         for (service in ServiceLoader.load(PartsProvider::class.java)) {
             val packageName = service.javaClass.packageName
