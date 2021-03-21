@@ -30,9 +30,9 @@ Data has the following goals:
 Here's how this looks in Joy Data:
 
 ```kotlin
-object FirstName : Role<String>()
-object MiddleName : Role<String>()
-object Age : Role<Int>()
+object FirstName : StringRole()
+object MiddleName : StringRole()
+object Age : IntRole()
 
 open class Person(vararg parts: Part) : Mix(*parts) {
     val firstName by FirstName
