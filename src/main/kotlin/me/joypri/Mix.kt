@@ -625,6 +625,10 @@ interface PartsProvider
 
 val roleDeclarationsCache = ConcurrentHashMap<KClass<*>, List<RoleDeclaration>>()
 
+/**
+ * Returns a list of [RoleDeclaration] representing roles declared in [kclass]. For a given class,
+ * this function always returns the same roles in the same order.
+ */
 fun <T : Mix> roleDeclarations(kclass: KClass<T>): List<RoleDeclaration> =
     roleDeclarationsCache.computeIfAbsent(kclass) {
         val instance = kclass.constructFromParts(listOf(ConstructedForReflection of Unit))
@@ -656,5 +660,11 @@ private val mixImpsForFace: Map<KType, List<KClass<*>>> =
         m.forEach { (_, imps) -> imps.sortBy { it.qualifiedName } }
     }
 
+/**
+ * Returns a list of known [Mix] subclasses that are subtypes of [face]. For a package to be
+ * included in Joy data reflection, it must [provide](https://docs.oracle.com/javase/tutorial/ext/basics/spi.html)
+ * a [PartsProvider] service. For a given [face], this function always returns the same imps
+ * in the same order.
+ */
 fun mixImps(face: KType): List<KClass<*>> = mixImpsForFace[face] ?: listOf()
 
