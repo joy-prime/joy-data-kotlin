@@ -1,12 +1,20 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 group="me.joypri"
 version="0.0.1"
 
 plugins {
-    kotlin("jvm") version "1.5.10"
+    kotlin("jvm") version "1.5.31"
 }
 
 repositories {
     mavenCentral()
+}
+
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(11))
+    }
 }
 
 dependencies {
@@ -25,6 +33,8 @@ tasks.test {
 	}
 }
 
-//tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-//    kotlinOptions.jvmTarget = "1.8"
-//}
+tasks.withType<KotlinCompile> {
+    kotlinOptions {
+        jvmTarget = "11"
+    }
+}

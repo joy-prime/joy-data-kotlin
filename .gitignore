@@ -42,7 +42,11 @@ gradle-app.setting
 # gradle/wrapper/gradle-wrapper.properties
 
 ###### IntelliJ
-# Taken from https://github.com/github/gitignore/blob/master/Global/JetBrains.gitignore
+
+# Avoid committing this one because it contains, for example, project-jdk-name="temurin-11"
+.idea/misc.xml
+
+#### Taken from https://github.com/github/gitignore/blob/master/Global/JetBrains.gitignore
 
 # User-specific stuff
 .idea/**/workspace.xml
