@@ -4,7 +4,9 @@ group="me.joypri"
 version="0.0.1"
 
 plugins {
-    kotlin("jvm") version "1.5.31"
+    // For use as subproject, got the following error message
+    // request for plugin already on the classpath must not include a version
+    kotlin("jvm") // version "1.5.31"
 }
 
 repositories {
