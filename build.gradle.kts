@@ -6,7 +6,7 @@ version="0.0.1"
 plugins {
     // For use as subproject, got the following error message
     // request for plugin already on the classpath must not include a version
-    kotlin("jvm") // version "1.5.31"
+    kotlin("jvm")
 }
 
 repositories {
@@ -20,12 +20,14 @@ java {
 }
 
 dependencies {
+    implementation(kotlin("stdlib"))
     implementation(kotlin("reflect"))
     implementation(kotlin("script-runtime"))
-    implementation("org.reflections:reflections:0.9.12")
+    implementation("org.reflections:reflections:0.10.2")
 
     testImplementation(kotlin("test-junit"))
-    testImplementation("org.junit.jupiter:junit-jupiter:5.6.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.8.2")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
 }
 
 tasks.test {
