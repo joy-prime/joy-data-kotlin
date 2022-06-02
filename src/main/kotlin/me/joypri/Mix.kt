@@ -549,9 +549,10 @@ infix fun <V : Any> LeafRole<V>.to(value: V): Part = of(value)
 /**
  * TODO: Provide a counterpart for `MixRole`.
  */
-infix fun <V : Any> LeafRole<V>.of(value: V): Part {
-    return Part(qualifiedName, value)
-}
+infix fun <V : Any> LeafRole<V>.of(value: V): Part = Part(qualifiedName, value)
+
+infix fun <V : Any> LeafRole<V>.maybe(value: V?): Part? =
+    if (value == null) null else of(value)
 
 /**
  * Represents a [LeafRole] whose value is a [Mix] subclass `M`, with corresponding [Remix] subclass `R`.
